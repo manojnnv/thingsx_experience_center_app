@@ -69,9 +69,9 @@ export function HeroSection() {
         <div className="hero-logo-right opacity-0 text-right">
           <span
             className="text-2xl md:text-3xl tracking-tight font-semibold"
-            style={{ color: colors.primary }}
+            style={{ color: colors.text }}
           >
-            Things<span style={{ color: colors.text }}>X</span>
+            Things<span style={{ color: colors.primary }}>X</span>
           </span>
           <div
             className="text-xs tracking-wider mt-1"

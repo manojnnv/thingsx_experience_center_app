@@ -14,6 +14,8 @@ import {
 import { pollSensorData, SensorLiveReading } from "@/app/services/sensors/sensors";
 import { updateEPDValue, bulkUpdateEPD, BulkUpdatePayload } from "@/app/services/epd/epd";
 import { Toaster } from "sonner";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { AppTabs, TabItem } from "@/components/AppTabs";
 
 // Constants
 const SENSOR_TIMEOUT_MS = 10000; // 10 seconds
@@ -47,6 +49,9 @@ type EPDFieldValues = {
 };
 
 function Page() {
+  // Auth state
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  
   // Page state
   const [showVideo, setShowVideo] = useState(true);
   const [activeTab, setActiveTab] = useState<"grid" | "topology" | "epd">("grid");
@@ -194,19 +199,22 @@ function Page() {
     }
   };
 
-  // Start polling when topology tab is active
+  // Start polling when topology tab is active and authenticated
   useEffect(() => {
-    if (activeTab === "topology" && !showVideo) {
-      pollForData();
-      pollIntervalRef.current = setInterval(pollForData, POLL_INTERVAL_MS);
-      cleanupIntervalRef.current = setInterval(cleanupDisconnectedSensors, 1000);
-      
-      return () => {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        if (cleanupIntervalRef.current) clearInterval(cleanupIntervalRef.current);
-      };
+    if (activeTab !== "topology" || showVideo || !isAuthenticated || authLoading) {
+      return;
     }
-  }, [activeTab, showVideo]);
+    
+    pollForData();
+    pollIntervalRef.current = setInterval(pollForData, POLL_INTERVAL_MS);
+    cleanupIntervalRef.current = setInterval(cleanupDisconnectedSensors, 1000);
+    
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (cleanupIntervalRef.current) clearInterval(cleanupIntervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, showVideo, isAuthenticated, authLoading]);
 
   // EPD handlers
   const handleEPDFieldChange = (tin: string, fieldKey: string, value: string | number) => {
@@ -277,10 +285,11 @@ function Page() {
 
   const skipVideo = () => setShowVideo(false);
 
-  const tabs = [
-    { id: "grid", label: "Component Matrix", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" },
-    { id: "topology", label: "Live Topology", icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" },
-    { id: "epd", label: "EPD Control", icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
+  // Tab configuration for AppTabs component
+  const tabs: TabItem[] = [
+    { id: "grid", label: "Component Matrix", icon: "📊" },
+    { id: "topology", label: "Live Topology", icon: "🔗" },
+    { id: "epd", label: "EPD Control", icon: "🖥️" },
   ];
 
   return (
@@ -335,24 +344,13 @@ function Page() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex justify-center gap-2 mt-4">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300"
-                style={{
-                  backgroundColor: activeTab === tab.id ? `${colors.yellow}20` : colors.transparent,
-                  color: activeTab === tab.id ? colors.yellow : colors.textMuted,
-                  border: `1px solid ${activeTab === tab.id ? colors.yellow : colors.border}`,
-                }}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
-                </svg>
-                <span className="hidden md:inline">{tab.label}</span>
-              </button>
-            ))}
+          <div className="flex justify-center mt-4">
+            <AppTabs
+              tabs={tabs}
+              activeTab={activeTab}
+              onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+              accentColor={colors.sensorAccent}
+            />
           </div>
         </header>
 

@@ -31,7 +31,15 @@ export const theme = {
     orange: "#ff9f43",
     purple: "#5f27cd",
     blue: "#00d2d3",
-    yellow: "#ffd700", // For sensors/endpoints
+    yellow: "#ffd700",
+
+    // Experience-specific accent colors
+    sensorAccent: "#ffd700", // Yellow for Sensors & Endnodes
+    retailAccent: "#00d4aa", // Teal for Retail Experience
+    retailAccentHover: "#00e6b8",
+    retailAccentMuted: "rgba(0, 212, 170, 0.3)",
+    retailAccentFaint: "rgba(0, 212, 170, 0.05)",
+    warehouseAccent: "#ff9f43", // Orange for Warehouse Experience
 
     // Star/constellation colors
     starBright: "#00d4aa",

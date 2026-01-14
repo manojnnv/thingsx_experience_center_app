@@ -160,52 +160,172 @@ export interface ESLFieldConfig {
 }
 
 /**
- * ESL Devices for Retail Experience
+ * ESL Devices for Retail Experience (12 ESLs as per requirement)
  */
 export const retailESLDevices: ESLConfig[] = [
   // TODO: Replace with your real ESL TINs
-  {
-    tin: "ESL-RETAIL-001",
-    displayName: "Shelf Label 1",
-    size: "small",
-    color: "black",
-    width: 152,
-    height: 152,
-    productFields: [
-      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Product" },
-      { key: "price", label: "Price", type: "price", defaultValue: "0.00" },
-      { key: "sku", label: "SKU", type: "text", defaultValue: "SKU-000" },
-    ],
-  },
-  {
-    tin: "ESL-RETAIL-002",
-    displayName: "Shelf Label 2",
-    size: "medium",
-    color: "red",
-    width: 296,
-    height: 152,
-    productFields: [
-      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Product" },
-      { key: "price", label: "Price", type: "price", defaultValue: "0.00" },
-      { key: "discount", label: "Discount", type: "text", defaultValue: "" },
-      { key: "barcode", label: "Barcode", type: "barcode", defaultValue: "0000000000" },
-    ],
-  },
-  {
-    tin: "ESL-RETAIL-003",
-    displayName: "Shelf Label 3",
-    size: "large",
-    color: "yellow",
-    width: 400,
-    height: 300,
-    productFields: [
-      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Featured Product" },
-      { key: "description", label: "Description", type: "text", defaultValue: "" },
-      { key: "price", label: "Price", type: "price", defaultValue: "0.00" },
-      { key: "original_price", label: "Original Price", type: "price", defaultValue: "" },
-      { key: "promo", label: "Promo Text", type: "text", defaultValue: "SALE" },
-    ],
-  },
+  // Row 1 - Top Shelf
+  { tin: "ESL-RETAIL-001", displayName: "Shelf 1 - Label 1", size: "small", color: "black", width: 152, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Organic Almonds" },
+    { key: "price", label: "Price", type: "price", defaultValue: "12.99" },
+    { key: "sku", label: "SKU", type: "text", defaultValue: "ALM-001" },
+  ]},
+  { tin: "ESL-RETAIL-002", displayName: "Shelf 1 - Label 2", size: "small", color: "black", width: 152, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Greek Yogurt" },
+    { key: "price", label: "Price", type: "price", defaultValue: "4.99" },
+    { key: "sku", label: "SKU", type: "text", defaultValue: "YOG-002" },
+  ]},
+  { tin: "ESL-RETAIL-003", displayName: "Shelf 1 - Label 3", size: "small", color: "red", width: 152, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Energy Bars" },
+    { key: "price", label: "Price", type: "price", defaultValue: "2.49" },
+    { key: "sku", label: "SKU", type: "text", defaultValue: "BAR-003" },
+  ]},
+  { tin: "ESL-RETAIL-004", displayName: "Shelf 1 - Label 4", size: "small", color: "black", width: 152, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Coconut Water" },
+    { key: "price", label: "Price", type: "price", defaultValue: "3.49" },
+    { key: "sku", label: "SKU", type: "text", defaultValue: "COC-004" },
+  ]},
+  // Row 2 - Middle Shelf
+  { tin: "ESL-RETAIL-005", displayName: "Shelf 2 - Label 1", size: "medium", color: "yellow", width: 296, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Premium Coffee" },
+    { key: "price", label: "Price", type: "price", defaultValue: "18.99" },
+    { key: "original_price", label: "Original Price", type: "price", defaultValue: "24.99" },
+    { key: "promo", label: "Promo", type: "text", defaultValue: "25% OFF" },
+  ]},
+  { tin: "ESL-RETAIL-006", displayName: "Shelf 2 - Label 2", size: "medium", color: "black", width: 296, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Green Tea" },
+    { key: "price", label: "Price", type: "price", defaultValue: "8.99" },
+    { key: "description", label: "Description", type: "text", defaultValue: "100 bags" },
+  ]},
+  { tin: "ESL-RETAIL-007", displayName: "Shelf 2 - Label 3", size: "medium", color: "red", width: 296, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Protein Powder" },
+    { key: "price", label: "Price", type: "price", defaultValue: "29.99" },
+    { key: "promo", label: "Promo", type: "text", defaultValue: "NEW!" },
+  ]},
+  { tin: "ESL-RETAIL-008", displayName: "Shelf 2 - Label 4", size: "medium", color: "black", width: 296, height: 152, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Honey" },
+    { key: "price", label: "Price", type: "price", defaultValue: "7.49" },
+    { key: "description", label: "Description", type: "text", defaultValue: "Raw & Organic" },
+  ]},
+  // Row 3 - Bottom Shelf
+  { tin: "ESL-RETAIL-009", displayName: "Shelf 3 - Label 1", size: "large", color: "yellow", width: 400, height: 300, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Vitamin Bundle" },
+    { key: "description", label: "Description", type: "text", defaultValue: "Complete daily nutrition" },
+    { key: "price", label: "Price", type: "price", defaultValue: "34.99" },
+    { key: "original_price", label: "Original Price", type: "price", defaultValue: "49.99" },
+    { key: "promo", label: "Promo", type: "text", defaultValue: "BEST SELLER" },
+  ]},
+  { tin: "ESL-RETAIL-010", displayName: "Shelf 3 - Label 2", size: "large", color: "black", width: 400, height: 300, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Omega-3 Fish Oil" },
+    { key: "description", label: "Description", type: "text", defaultValue: "Heart health support" },
+    { key: "price", label: "Price", type: "price", defaultValue: "19.99" },
+  ]},
+  { tin: "ESL-RETAIL-011", displayName: "Shelf 3 - Label 3", size: "large", color: "red", width: 400, height: 300, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Multivitamin Pack" },
+    { key: "description", label: "Description", type: "text", defaultValue: "30 day supply" },
+    { key: "price", label: "Price", type: "price", defaultValue: "24.99" },
+    { key: "promo", label: "Promo", type: "text", defaultValue: "BUY 2 GET 1" },
+  ]},
+  { tin: "ESL-RETAIL-012", displayName: "Shelf 3 - Label 4", size: "large", color: "black", width: 400, height: 300, productFields: [
+    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Probiotic Blend" },
+    { key: "description", label: "Description", type: "text", defaultValue: "Digestive wellness" },
+    { key: "price", label: "Price", type: "price", defaultValue: "27.99" },
+  ]},
+];
+
+// ===========================================
+// LED STRIP CONFIGURATION
+// For Smart Shelf Lighting
+// ===========================================
+
+export interface LEDStripConfig {
+  tin: string;
+  displayName: string;
+  shelfPosition: "top" | "middle" | "bottom";
+  defaultColor: string;
+  defaultBrightness: number;
+}
+
+/**
+ * LED Strip devices for shelf lighting
+ */
+export const retailLEDStrips: LEDStripConfig[] = [
+  // TODO: Replace with your real LED TINs
+  { tin: "LED-SHELF-001", displayName: "Top Shelf LED", shelfPosition: "top", defaultColor: "#ffffff", defaultBrightness: 80 },
+  { tin: "LED-SHELF-002", displayName: "Middle Shelf LED", shelfPosition: "middle", defaultColor: "#ffffff", defaultBrightness: 80 },
+  { tin: "LED-SHELF-003", displayName: "Bottom Shelf LED", shelfPosition: "bottom", defaultColor: "#ffffff", defaultBrightness: 80 },
+];
+
+// ===========================================
+// LOAD CELL CONFIGURATION
+// For Stock Sensing
+// ===========================================
+
+export interface LoadCellConfig {
+  tin: string;
+  displayName: string;
+  shelfPosition: "top" | "middle" | "bottom";
+  slotIndex: number;
+  maxWeight: number; // in grams
+  productWeight: number; // weight per unit in grams
+}
+
+/**
+ * Load cell devices for stock sensing
+ */
+export const retailLoadCells: LoadCellConfig[] = [
+  // TODO: Replace with your real Load Cell TINs
+  { tin: "LOAD-001", displayName: "Slot 1", shelfPosition: "top", slotIndex: 1, maxWeight: 2000, productWeight: 250 },
+  { tin: "LOAD-002", displayName: "Slot 2", shelfPosition: "top", slotIndex: 2, maxWeight: 2000, productWeight: 150 },
+  { tin: "LOAD-003", displayName: "Slot 3", shelfPosition: "top", slotIndex: 3, maxWeight: 2000, productWeight: 60 },
+  { tin: "LOAD-004", displayName: "Slot 4", shelfPosition: "top", slotIndex: 4, maxWeight: 2000, productWeight: 330 },
+  { tin: "LOAD-005", displayName: "Slot 5", shelfPosition: "middle", slotIndex: 1, maxWeight: 3000, productWeight: 400 },
+  { tin: "LOAD-006", displayName: "Slot 6", shelfPosition: "middle", slotIndex: 2, maxWeight: 3000, productWeight: 200 },
+  { tin: "LOAD-007", displayName: "Slot 7", shelfPosition: "middle", slotIndex: 3, maxWeight: 3000, productWeight: 500 },
+  { tin: "LOAD-008", displayName: "Slot 8", shelfPosition: "middle", slotIndex: 4, maxWeight: 3000, productWeight: 450 },
+];
+
+// ===========================================
+// COMPUTER VISION / CAMERA CONFIGURATION
+// ===========================================
+
+export interface CameraConfig {
+  tin: string;
+  displayName: string;
+  zone: string;
+  capabilities: ("demographics" | "tracking" | "interaction" | "attendance")[];
+}
+
+/**
+ * Camera devices for computer vision
+ */
+export const retailCameras: CameraConfig[] = [
+  // TODO: Replace with your real Camera TINs
+  { tin: "CAM-RETAIL-001", displayName: "Store Entrance Camera", zone: "entrance", capabilities: ["demographics", "tracking", "attendance"] },
+  { tin: "CAM-RETAIL-002", displayName: "Shelf Aisle Camera", zone: "aisle", capabilities: ["demographics", "tracking", "interaction"] },
+  { tin: "CAM-RETAIL-003", displayName: "Checkout Camera", zone: "checkout", capabilities: ["demographics", "tracking"] },
+];
+
+// ===========================================
+// RACK SCREEN CONFIGURATION
+// For Triggered Marketing
+// ===========================================
+
+export interface RackScreenConfig {
+  tin: string;
+  displayName: string;
+  zone: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Rack screen devices for triggered marketing
+ */
+export const retailRackScreens: RackScreenConfig[] = [
+  // TODO: Replace with your real Rack Screen TINs
+  { tin: "SCREEN-001", displayName: "Aisle 1 Display", zone: "aisle_1", width: 1920, height: 1080 },
+  { tin: "SCREEN-002", displayName: "Aisle 2 Display", zone: "aisle_2", width: 1920, height: 1080 },
 ];
 
 // ===========================================
@@ -215,6 +335,10 @@ export const retailESLDevices: ESLConfig[] = [
 export const getSensorTins = (): string[] => sensorsDeviceTins.map((d) => d.tin);
 export const getSensorEPDTins = (): string[] => sensorEPDDevices.map((d) => d.tin);
 export const getRetailESLTins = (): string[] => retailESLDevices.map((d) => d.tin);
+export const getRetailLEDTins = (): string[] => retailLEDStrips.map((d) => d.tin);
+export const getRetailLoadCellTins = (): string[] => retailLoadCells.map((d) => d.tin);
+export const getRetailCameraTins = (): string[] => retailCameras.map((d) => d.tin);
+export const getRetailScreenTins = (): string[] => retailRackScreens.map((d) => d.tin);
 
 /**
  * Sensor category display configuration
