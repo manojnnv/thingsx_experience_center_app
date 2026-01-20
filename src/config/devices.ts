@@ -31,8 +31,7 @@ export interface EndnodeConfig {
  * All sensors connect to this single endnode
  */
 export const centralEndnode: EndnodeConfig = {
-  // TODO: Replace with your real endnode TIN
-  tin: "ENDNODE-001",
+  tin: "EN0001000020",
   displayName: "ThingsX Endnode",
 };
 
@@ -41,15 +40,17 @@ export const centralEndnode: EndnodeConfig = {
  * All sensors connect to the central endnode
  */
 export const sensorsDeviceTins: SensorConfig[] = [
-  // TODO: Replace with your real sensor TINs
-  { tin: "SENSOR-001", displayName: "Temperature Sensor 1", category: "temperature" },
-  { tin: "SENSOR-002", displayName: "Humidity Sensor 1", category: "humidity" },
-  { tin: "SENSOR-003", displayName: "Motion Detector 1", category: "motion" },
-  { tin: "SENSOR-004", displayName: "Light Sensor 1", category: "light" },
-  { tin: "SENSOR-005", displayName: "Pressure Sensor 1", category: "pressure" },
-  { tin: "SENSOR-006", displayName: "Air Quality Monitor", category: "air_quality" },
-  { tin: "SENSOR-007", displayName: "Temperature Sensor 2", category: "temperature" },
-  { tin: "SENSOR-008", displayName: "Humidity Sensor 2", category: "humidity" },
+  { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature" },
+  { tin: "SN0002000001", displayName: "Accelerometer", category: "accelerometer" },
+  { tin: "SN0006000001", displayName: "MQ2", category: "gas" },
+  { tin: "SN0006000002", displayName: "MQ6", category: "gas" },
+  { tin: "SN0001000010", displayName: "Temp (BME680)", category: "temperature" },
+  { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
+  { tin: "SN0007000002", displayName: "Light Intensity", category: "light" },
+  { tin: "SN0031000001", displayName: "Magnetometer", category: "magnetometer" },
+  { tin: "SN0008000002", displayName: "Relay - 1 ch", category: "relay" },
+  { tin: "SN0020000001", displayName: "Relay - 2 ch", category: "relay" },
+  { tin: "SN0009000001", displayName: "Relay - 4 ch", category: "relay" },
 ];
 
 // ===========================================
@@ -350,6 +351,11 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   light: { label: "Light", unit: "lux", icon: "sun" },
   pressure: { label: "Pressure", unit: "hPa", icon: "gauge" },
   air_quality: { label: "Air Quality", unit: "AQI", icon: "wind" },
+  accelerometer: { label: "Accelerometer", unit: "m/s²", icon: "activity" },
+  gas: { label: "Gas", unit: "ppm", icon: "wind" },
+  current: { label: "Current", unit: "A", icon: "zap" },
+  magnetometer: { label: "Magnetometer", unit: "µT", icon: "compass" },
+  relay: { label: "Relay", unit: "state", icon: "toggle-right" },
 };
 
 /**

@@ -1,0 +1,218 @@
+/* Theme-aware Date/Time picker styles for rsuite picker
+   Uses CSS variables set by the component for theme alignment.
+*/
+
+:root {
+  --datepicker-bg: #ffffff;
+  --datepicker-popup-bg: #ffffff;
+  --datepicker-foreground: #111827;
+  --datepicker-border: #d1d5db;
+  --datepicker-hover: rgba(17, 24, 39, 0.06);
+  --datepicker-active-bg: #000000;
+  --datepicker-active-fg: #ffffff;
+  --datepicker-range-bg: #8b8b8b;
+  --datepicker-range-fg: #ffffff;
+  --datepicker-range-hover-bg: #6f6f6f;
+  --datepicker-shadow: rgba(0, 0, 0, 0.18);
+}
+
+.rs-picker-toggle-wrapper {
+  background-color: var(--datepicker-bg) !important;
+  border: 1px solid var(--datepicker-border) !important;
+  border-radius: 10px !important;
+}
+.rs-picker-toggle-wrapper:hover {
+  background-color: var(--datepicker-bg) !important;
+  border-color: var(--datepicker-border) !important;
+}
+.rs-picker-toggle-wrapper:focus-within {
+  box-shadow: 0 0 0 3px var(--datepicker-shadow) !important;
+}
+
+/* Hard override for input box + text */
+.rs-picker-toggle,
+.rs-picker-toggle.rs-btn,
+.rs-picker-toggle-wrapper,
+.rs-picker-default .rs-picker-toggle,
+.rs-picker-default .rs-picker-toggle-wrapper,
+.rs-picker-date-range .rs-picker-toggle,
+.rs-picker-date-range .rs-picker-toggle-wrapper {
+  background-color: #060608 !important;
+  color: #ffffff !important;
+}
+.rs-picker-toggle-textbox,
+.rs-picker-toggle-value,
+.rs-picker-toggle-placeholder,
+.rs-picker-toggle-input,
+.rs-picker-toggle-textbox input,
+.rs-picker-toggle-input input {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background-color: transparent !important;
+}
+.rs-picker-toggle-caret,
+.rs-picker-toggle-clean {
+  color: #ffffff !important;
+}
+
+/* Force the input box background on the picker root */
+.rs-picker,
+.rs-picker-default,
+.rs-picker-date-range {
+  background-color: #060608 !important;
+}
+
+/* Popup panel backgrounds */
+.rs-picker-popup,
+.rs-picker-daterange-panel,
+.rs-picker-daterange-calendar-group,
+.rs-calendar,
+.rs-calendar-table {
+  background-color: #060608 !important;
+  color: #ffffff !important;
+}
+
+.rs-picker-daterange-panel * {
+  color: #ffffff !important;
+}
+
+.rs-calendar-header-month-toolbar .rs-btn {
+  color: #ffffff !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+}
+.rs-calendar-header-month-toolbar .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+.rs-calendar-table-cell-today .rs-calendar-table-cell-content {
+  border-color: var(--datepicker-border) !important;
+}
+
+.rs-calendar-table-cell-selected-start .rs-calendar-table-cell-content,
+.rs-calendar-table-cell-selected-end .rs-calendar-table-cell-content {
+  background-color: #00d4aa !important;
+  color: #ffffff !important;
+}
+.rs-calendar-table-cell-selected-start:hover .rs-calendar-table-cell-content,
+.rs-calendar-table-cell-selected-end:hover .rs-calendar-table-cell-content {
+  background-color: #00d4aa !important;
+  color: #ffffff !important;
+}
+
+.rs-calendar-table-cell-in-range .rs-calendar-table-cell-content {
+  background-color: rgba(0, 212, 170, 0.25) !important;
+  color: #ffffff !important;
+}
+.rs-calendar-table-cell-in-range:hover .rs-calendar-table-cell-content {
+  background-color: rgba(0, 212, 170, 0.35) !important;
+  color: #ffffff !important;
+}
+
+.rs-calendar-table-cell:hover .rs-calendar-table-cell-content {
+  background-color: rgba(255,255,255,0.08) !important;
+  color: #ffffff !important;
+}
+
+.rs-calendar-header-title .rs-btn {
+  color: #ffffff !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+}
+.rs-calendar-header-title .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+.rs-calendar-month-dropdown {
+  border-color: #1a1a1a !important;
+  background-color: #060608 !important;
+}
+.rs-calendar-month-dropdown-cell {
+  color: #ffffff !important;
+  font-weight: 400 !important;
+  background-color: transparent !important;
+}
+.rs-calendar-month-dropdown-cell:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+.rs-calendar-month-dropdown-cell-active {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+  font-weight: 600 !important;
+}
+
+.rs-picker-toolbar .rs-btn {
+  background-color: #00d4aa !important;
+  color: #ffffff !important;
+  border-color: #00d4aa !important;
+  font-weight: 600 !important;
+}
+.rs-picker-toolbar .rs-btn:hover {
+  background-color: #00e6b8 !important;
+}
+
+.rs-picker-toggle.rs-btn {
+  border-color: #1a1a1a !important;
+  color: #ffffff !important;
+}
+.rs-picker-toggle.rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+.rs-picker-select-menu-item {
+  color: #ffffff !important;
+  font-weight: 400 !important;
+}
+.rs-picker-select-menu-item:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+.rs-picker-select-menu-item-active {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+  font-weight: 600 !important;
+}
+
+.rs-calendar-footer .rs-btn {
+  color: #ffffff !important;
+  border-color: #1a1a1a !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+}
+.rs-calendar-footer .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+.rs-picker-date-range-predefined {
+  border-color: var(--datepicker-border) !important;
+}
+.rs-picker-date-range-predefined .rs-btn {
+  color: #ffffff !important;
+  border-color: #00d4aa !important;
+  background-color: #00d4aa !important;
+  font-weight: 600 !important;
+}
+.rs-picker-date-range-predefined .rs-btn:hover {
+  background-color: #00e6b8 !important;
+}
+
+.rs-picker-date-range .rs-picker-toggle-value,
+.rs-picker-date-range .rs-picker-toggle-placeholder {
+  color: #ffffff !important;
+}
+
+.rs-btn:focus,
+.rs-picker-toggle:focus {
+  outline: 2px solid var(--datepicker-border) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px var(--datepicker-shadow) !important;
+}
+
+.rs-calendar-table-cell-content {
+  color: #ffffff !important;
+}
+
+.rs-calendar-table-cell-selected-start .rs-calendar-table-cell-content *,
+.rs-calendar-table-cell-selected-end .rs-calendar-table-cell-content * {
+  color: var(--datepicker-active-fg) !important;
+}

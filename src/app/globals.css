@@ -79,6 +79,29 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+
+  /* Rsuite overrides to match ThingsX theme */
+  --rs-text-primary: #ffffff;
+  --rs-text-secondary: #ffffff;
+  --rs-text-tertiary: #ffffff;
+  --rs-text-heading: #ffffff;
+  --rs-text-inverse: #060608;
+  --rs-input-bg: #060608;
+  --rs-input-disabled-bg: #0a0a0c;
+  --rs-border-primary: #1a1a1a;
+  --rs-border-secondary: #1a1a1a;
+  --rs-input-focus-border: #00d4aa;
+  --rs-primary-500: #00d4aa;
+  --rs-primary-600: #00d4aa;
+  --rs-primary-700: #00d4aa;
+  --rs-text-active: #00d4aa;
+  --rs-bg-active: rgba(0, 212, 170, 0.33);
+  --rs-btn-default-bg: #00d4aa;
+  --rs-btn-default-text: #060608;
+  --rs-btn-default-hover-bg: #00d4aa;
+  --rs-btn-default-active-bg: #00d4aa;
+  --rs-bg-well: #060608;
+  --rs-bg-card: #0a0a0c;
 }
 
 .dark {
@@ -113,6 +136,29 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+
+  /* Rsuite overrides to match ThingsX theme */
+  --rs-text-primary: #ffffff;
+  --rs-text-secondary: #ffffff;
+  --rs-text-tertiary: #ffffff;
+  --rs-text-heading: #ffffff;
+  --rs-text-inverse: #060608;
+  --rs-input-bg: #060608;
+  --rs-input-disabled-bg: #0a0a0c;
+  --rs-border-primary: #1a1a1a;
+  --rs-border-secondary: #1a1a1a;
+  --rs-input-focus-border: #00d4aa;
+  --rs-primary-500: #00d4aa;
+  --rs-primary-600: #00d4aa;
+  --rs-primary-700: #00d4aa;
+  --rs-text-active: #00d4aa;
+  --rs-bg-active: rgba(0, 212, 170, 0.33);
+  --rs-btn-default-bg: #00d4aa;
+  --rs-btn-default-text: #060608;
+  --rs-btn-default-hover-bg: #00d4aa;
+  --rs-btn-default-active-bg: #00d4aa;
+  --rs-bg-well: #060608;
+  --rs-bg-card: #0a0a0c;
 }
 
 @layer base {

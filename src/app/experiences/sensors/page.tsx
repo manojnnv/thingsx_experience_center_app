@@ -343,15 +343,15 @@ function Page() {
             <div className="w-20" />
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex justify-center mt-4">
-            <AppTabs
-              tabs={tabs}
-              activeTab={activeTab}
-              onTabChange={(id) => setActiveTab(id as typeof activeTab)}
-              accentColor={colors.sensorAccent}
-            />
-          </div>
+        {/* Tab Navigation */}
+        <div className="px-8 py-4">
+          <AppTabs
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={(id) => setActiveTab(id as typeof activeTab)}
+            accentColor={colors.sensorAccent}
+          />
+        </div>
         </header>
 
         {/* Content Area */}

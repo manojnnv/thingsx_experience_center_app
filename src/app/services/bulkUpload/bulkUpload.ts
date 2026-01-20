@@ -8,7 +8,7 @@
  */
 
 import { api } from "@/app/utils/api";
-import { getSiteId } from "@/config/site";
+import { getOrgId, getSiteId } from "@/config/site";
 import { toast } from "sonner";
 
 // ===========================================
@@ -21,6 +21,16 @@ export interface DeviceCategory {
 }
 
 export interface DeviceConfigOption {
+  id: string;
+  name: string;
+}
+
+export interface OrgSite {
+  id: string;
+  name: string;
+}
+
+export interface EslTemplate {
   id: string;
   name: string;
 }
@@ -61,6 +71,31 @@ async function getDeviceCategories(siteId?: string): Promise<{ data: DeviceCateg
 }
 
 /**
+ * Get organization sites (used by thingsx_ui_v2 bulk update flow)
+ */
+async function getOrgSites(orgId?: string): Promise<{ data: OrgSite[] | null; error: string | null }> {
+  try {
+    const resp = await api.post("/v1/org/sites", {
+      org_id: orgId || getOrgId(),
+    });
+
+    const sites = resp?.data?.data;
+    if (Array.isArray(sites)) {
+      const siteList = sites.map((site) => ({
+        id: String(site.id ?? site.site_id ?? ""),
+        name: String(site.name ?? site.site_name ?? ""),
+      }));
+      return { data: siteList, error: null };
+    }
+
+    return { data: [], error: null };
+  } catch (error) {
+    console.error("Error fetching org sites:", error);
+    return { data: null, error: "Failed to fetch sites" };
+  }
+}
+
+/**
  * Get device config options for a category
  */
 async function getDeviceConfigOptions(deviceCode: string): Promise<{ data: DeviceConfigOption[] | null; error: string | null }> {
@@ -86,18 +121,44 @@ async function getDeviceConfigOptions(deviceCode: string): Promise<{ data: Devic
 }
 
 /**
+ * Get ESL templates for a device code (used by bulk update flow)
+ */
+async function getEslTemplates(deviceCode: string): Promise<{ data: EslTemplate[] | null; error: string | null }> {
+  try {
+    const resp = await api.post("/v1/esl/device/templates", {
+      device_code: deviceCode,
+    });
+
+    const templates = resp?.data?.data;
+    if (Array.isArray(templates)) {
+      const templateList = templates.map((template) => ({
+        id: String(template.id ?? template.template_id ?? ""),
+        name: String(template.name ?? template.template_name ?? ""),
+      }));
+      return { data: templateList, error: null };
+    }
+
+    return { data: [], error: null };
+  } catch (error) {
+    console.error("Error fetching ESL templates:", error);
+    return { data: null, error: "Failed to fetch ESL templates" };
+  }
+}
+
+/**
  * Retrieve devices for bulk update
  */
 async function retrieveDevicesForBulk(
   deviceCategory: string,
   deviceConfig: string,
-  templateId?: string
+  templateId?: string,
+  siteId?: string
 ): Promise<{ data: BulkDeviceData[] | null; columns: string[] | null; error: string | null }> {
   try {
     const payload: Record<string, string> = {
       device_code: deviceCategory,
       config_option: deviceConfig,
-      site_id: getSiteId(),
+      site_id: siteId || getSiteId(),
     };
     
     if (templateId) {
@@ -118,6 +179,8 @@ async function retrieveDevicesForBulk(
       Object.keys(obj).forEach((key) => {
         if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
           Object.assign(result, obj[key]);
+          result.__nestedKey = key;
+          result.__nestedFields = Object.keys(obj[key] || {});
         } else {
           result[key] = obj[key];
         }
@@ -125,8 +188,36 @@ async function retrieveDevicesForBulk(
       return result;
     };
     
-    const flattenedData = content.map((item: any) => flattenObject(item));
-    const columns = flattenedData.length > 0 ? Object.keys(flattenedData[0]) : [];
+    const normalizeDeviceRow = (row: Record<string, any>) => {
+      const normalized = { ...row };
+
+      const tinValue = normalized.tin ?? normalized.Tin ?? normalized.TIN;
+      if (tinValue !== undefined) {
+        normalized.tin = tinValue;
+        delete normalized.Tin;
+        delete normalized.TIN;
+      }
+
+      const deviceNameValue =
+        normalized.device_name ??
+        normalized.Device_Name ??
+        normalized["Device Name"] ??
+        normalized.DeviceName;
+      if (deviceNameValue !== undefined) {
+        normalized.device_name = deviceNameValue;
+        delete normalized.Device_Name;
+        delete normalized["Device Name"];
+        delete normalized.DeviceName;
+      }
+
+      return normalized;
+    };
+
+    const flattenedData = content.map((item: any) => normalizeDeviceRow(flattenObject(item)));
+    const columns =
+      flattenedData.length > 0
+        ? Object.keys(flattenedData[0]).filter((key) => !key.startsWith("__"))
+        : [];
     
     return { data: flattenedData, columns, error: null };
   } catch (error) {
@@ -140,7 +231,7 @@ async function retrieveDevicesForBulk(
  */
 async function pushBulkUpdate(
   deviceConfig: string,
-  data: BulkDeviceData[]
+  data: Array<Record<string, any>>
 ): Promise<{ success: boolean; error: string | null }> {
   if (!deviceConfig) {
     toast.error("Please select device category & device config");
@@ -209,8 +300,10 @@ async function getDeviceConfig(tin: string): Promise<{ data: Record<string, any>
 }
 
 export {
+  getOrgSites,
   getDeviceCategories,
   getDeviceConfigOptions,
+  getEslTemplates,
   retrieveDevicesForBulk,
   pushBulkUpdate,
   updateDeviceConfig,

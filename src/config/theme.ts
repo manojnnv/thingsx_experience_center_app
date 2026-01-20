@@ -1,7 +1,4 @@
-/**
- * ThingsX Experience Center - Theme Configuration
- * Centralized color and styling tokens
- */
+/** ThingsX Experience Center - Theme Config*/
 
 export const theme = {
   colors: {
@@ -17,33 +14,33 @@ export const theme = {
     backgroundElevated: "#0d0d10",
 
     // Text colors
-    text: "#ffffff",
-    textMuted: "#777777",
-    textSubtle: "#666666",
-    textFaint: "#444444",
-    textDim: "#333333",
+    text: " #ffffff",
+    textMuted: " #ffffff",
+    textSubtle: " #ffffff",
+    textFaint: " #ffffff",
+    textDim: " #ffffff",
 
     // Border colors
-    border: "#1a1a1a",
-    borderSubtle: "#151515",
+    border: " #1a1a1a",
+    borderSubtle: " #151515",
 
     // Accent colors
-    orange: "#ff9f43",
-    purple: "#5f27cd",
-    blue: "#00d2d3",
-    yellow: "#ffd700",
+    orange: " #ff9f43",
+    purple: " #5f27cd",
+    blue: " #00d2d3",
+    yellow: " #ffd700",
 
     // Experience-specific accent colors
-    sensorAccent: "#ffd700", // Yellow for Sensors & Endnodes
-    retailAccent: "#00d4aa", // Teal for Retail Experience
-    retailAccentHover: "#00e6b8",
+    sensorAccent: " #ffd700", // Yellow for Sensors & Endnodes
+    retailAccent: " #00d4aa", // Teal for Retail Experience
+    retailAccentHover: " #00e6b8",
     retailAccentMuted: "rgba(0, 212, 170, 0.3)",
     retailAccentFaint: "rgba(0, 212, 170, 0.05)",
-    warehouseAccent: "#ff9f43", // Orange for Warehouse Experience
+    warehouseAccent: " #ff9f43", // Orange for Warehouse Experience
 
     // Star/constellation colors
-    starBright: "#00d4aa",
-    starDim: "#ffffff",
+    starBright: " #00d4aa",
+    starDim: " #ffffff",
 
     // Shadow colors
     shadowDark: "rgba(0, 0, 0, 0.4)",
