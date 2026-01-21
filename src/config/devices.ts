@@ -48,9 +48,9 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
   { tin: "SN0007000002", displayName: "Light Intensity", category: "light" },
   { tin: "SN0031000001", displayName: "Magnetometer", category: "magnetometer" },
-  { tin: "SN0008000002", displayName: "Relay - 1 ch", category: "relay" },
-  { tin: "SN0020000001", displayName: "Relay - 2 ch", category: "relay" },
-  { tin: "SN0009000001", displayName: "Relay - 4 ch", category: "relay" },
+  { tin: "SN0008000002", displayName: "Relay- 1 ch", category: "relay" },
+  { tin: "SN0020000001", displayName: "Relay- 2 ch", category: "relay" },
+  { tin: "SN0009000001", displayName: "Relay- 4 ch", category: "relay" },
 ];
 
 // ===========================================
@@ -69,6 +69,7 @@ export interface EPDConfig {
   width: number;  // in pixels
   height: number; // in pixels
   fields: EPDFieldConfig[]; // Editable fields on this EPD
+  templateId?: number;
 }
 
 export interface EPDFieldConfig {

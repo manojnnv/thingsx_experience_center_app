@@ -4,7 +4,7 @@ export type DisplayDevice = {
   type: string;
   category: string;
   status: "online" | "offline";
-  lastReading: number;
+  lastReading: number | null;
   unit: string;
 };
 

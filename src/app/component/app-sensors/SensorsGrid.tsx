@@ -19,6 +19,7 @@ function SensorsGrid({
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
       {devices.map((device) => {
         const liveData = connectedSensors.get(device.tin);
+        const displayValue = liveData?.value ?? device.lastReading;
         return (
           <button
             key={device.tin}
@@ -36,10 +37,16 @@ function SensorsGrid({
               </svg>
             </div>
             <p className="text-xs font-mono mb-1 truncate" style={{ color: colors.textMuted }}>{device.tin}</p>
-            <p className="text-sm font-medium truncate" style={{ color: colors.text }}>{device.type}</p>
+            <p className="text-sm font-medium truncate" style={{ color: colors.text }}>{device.name}</p>
             <p className="text-lg font-bold mt-1" style={{ color: colors.yellow }}>
-              {liveData?.value.toFixed(1) || "--"} <span className="text-xs font-normal">{device.unit}</span>
+              {displayValue !== null && displayValue !== undefined ? displayValue.toFixed(1) : "--"}{" "}
+              <span className="text-xs font-normal">{device.unit}</span>
             </p>
+            {!liveData && displayValue !== null && (
+              <p className="text-xs mt-1" style={{ color: colors.textMuted }}>
+                Last recorded
+              </p>
+            )}
           </button>
         );
       })}

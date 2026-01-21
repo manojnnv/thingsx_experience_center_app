@@ -72,7 +72,7 @@ function Page() {
             type: categoryInfo.label,
             category,
             status: "offline",
-            lastReading: 0,
+            lastReading: null,
             unit: categoryInfo.unit,
           };
         });
