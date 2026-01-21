@@ -1,0 +1,225 @@
+/* Theme-aware Date/Time picker styles for rsuite picker
+   Adds background variables so the picker adapts to light/dark mode.
+
+   New variables:
+   --datepicker-bg: page-level background for inputs/wrapper
+   --datepicker-popup-bg: popup / dropdown background
+
+   Existing variables also supported: --datepicker-foreground, --datepicker-border, etc.
+*/
+
+:root {
+  /* background */
+  --datepicker-bg: #060608;
+  --datepicker-popup-bg: #0a0a0c;
+
+  /* foreground & accents */
+  --datepicker-foreground: #ffffff;
+  --datepicker-border: #1a1a1a;
+  --datepicker-hover: rgba(255, 255, 255, 0.08);
+  --datepicker-active-bg: #00d4aa;
+  --datepicker-active-fg: #060608;
+  --datepicker-range-bg: rgba(0, 212, 170, 0.25);
+  --datepicker-range-fg: #ffffff;
+  --datepicker-range-hover-bg: rgba(0, 212, 170, 0.35);
+  --datepicker-shadow: rgba(0, 212, 170, 0.33);
+}
+
+/* Dark mode overrides */
+.dark,
+[data-theme="dark"] {
+  --datepicker-bg: #060608;
+  --datepicker-popup-bg: #0a0a0c;
+  --datepicker-foreground: #ffffff;
+  --datepicker-border: #1a1a1a;
+  --datepicker-hover: rgba(255, 255, 255, 0.08);
+  --datepicker-active-bg: #00d4aa;
+  --datepicker-active-fg: #060608;
+  --datepicker-range-bg: rgba(0, 212, 170, 0.25);
+  --datepicker-range-fg: #ffffff;
+  --datepicker-range-hover-bg: rgba(0, 212, 170, 0.35);
+  --datepicker-shadow: rgba(0, 212, 170, 0.33);
+}
+
+/* Apply background to toggle wrapper (input) */
+.rs-picker-toggle-wrapper {
+  background-color: var(--datepicker-bg) !important;
+  border: 1px solid var(--datepicker-border) !important;
+  border-radius: 4px !important;
+}
+.rs-picker-toggle-wrapper:hover {
+  background-color: var(--datepicker-bg) !important;
+  border-color: var(--datepicker-border) !important;
+}
+.rs-picker-toggle-wrapper:focus-within {
+  box-shadow: 0 0 0 3px var(--datepicker-shadow) !important;
+}
+
+/* Popup / dropdown background */
+.rs-picker-popup,
+.rs-calendar,
+.rs-calendar-table {
+  background-color: var(--datepicker-popup-bg) !important;
+  color: var(--datepicker-foreground) !important;
+}
+
+/* Navigation buttons (prev/next month) */
+.rs-calendar-header-month-toolbar .rs-btn {
+  color: var(--datepicker-foreground) !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+}
+.rs-calendar-header-month-toolbar .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+/* Current date (today) border */
+.rs-calendar-table-cell-today .rs-calendar-table-cell-content {
+  border-color: var(--datepicker-border) !important;
+}
+
+/* Start and end dates (selected) */
+.rs-calendar-table-cell-selected-start .rs-calendar-table-cell-content,
+.rs-calendar-table-cell-selected-end .rs-calendar-table-cell-content {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+}
+.rs-calendar-table-cell-selected-start:hover .rs-calendar-table-cell-content,
+.rs-calendar-table-cell-selected-end:hover .rs-calendar-table-cell-content {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+}
+
+/* Dates in-between the range */
+.rs-calendar-table-cell-in-range .rs-calendar-table-cell-content {
+  background-color: var(--datepicker-range-bg) !important;
+  color: var(--datepicker-range-fg) !important;
+}
+.rs-calendar-table-cell-in-range:hover .rs-calendar-table-cell-content {
+  background-color: var(--datepicker-range-hover-bg) !important;
+  color: var(--datepicker-range-fg) !important;
+}
+
+/* Regular date hover */
+.rs-calendar-table-cell:hover .rs-calendar-table-cell-content {
+  background-color: var(--datepicker-hover) !important;
+  color: var(--datepicker-foreground) !important;
+}
+
+/* Year/Month dropdown trigger */
+.rs-calendar-header-title .rs-btn {
+  color: var(--datepicker-foreground) !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+}
+.rs-calendar-header-title .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+/* Year/Month dropdown menu */
+.rs-calendar-month-dropdown {
+  border-color: var(--datepicker-border) !important;
+  background-color: var(--datepicker-popup-bg) !important;
+}
+.rs-calendar-month-dropdown-cell {
+  color: var(--datepicker-foreground) !important;
+  font-weight: 400 !important;
+  background-color: transparent !important;
+}
+.rs-calendar-month-dropdown-cell:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+.rs-calendar-month-dropdown-cell-active {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+  font-weight: 600 !important;
+}
+
+/* Time picker buttons */
+.rs-picker-toolbar .rs-btn {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+  border-color: var(--datepicker-border) !important;
+  font-weight: 600 !important;
+}
+.rs-picker-toolbar .rs-btn:hover {
+  background-color: var(--datepicker-range-hover-bg) !important;
+}
+
+/* Dropdown (toggle) */
+.rs-picker-toggle.rs-btn {
+  border-color: var(--datepicker-border) !important;
+  color: var(--datepicker-foreground) !important;
+}
+.rs-picker-toggle.rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+.rs-picker-select-menu-item {
+  color: var(--datepicker-foreground) !important;
+  font-weight: 400 !important;
+}
+.rs-picker-select-menu-item:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+.rs-picker-select-menu-item-active {
+  background-color: var(--datepicker-active-bg) !important;
+  color: var(--datepicker-active-fg) !important;
+  font-weight: 600 !important;
+}
+
+/* Today button */
+.rs-calendar-footer .rs-btn {
+  color: var(--datepicker-foreground) !important;
+  border-color: var(--datepicker-border) !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+}
+.rs-calendar-footer .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+/* Shortcut buttons */
+.rs-picker-date-range-predefined {
+  border-color: var(--datepicker-border) !important;
+}
+.rs-picker-date-range-predefined .rs-btn {
+  color: var(--datepicker-foreground) !important;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  font-weight: 600 !important;
+}
+.rs-picker-date-range-predefined .rs-btn:hover {
+  background-color: var(--datepicker-hover) !important;
+}
+
+/* Misc: ensure foreground usage */
+.rs-calendar-month-dropdown-year-active,
+.rs-calendar-month-dropdown-cell-active .rs-calendar-month-dropdown-cell-content {
+  color: var(--datepicker-foreground) !important;
+}
+
+.rs-picker-date-range .rs-picker-toggle-value,
+.rs-picker-date-range .rs-picker-toggle-placeholder {
+  color: var(--datepicker-foreground) !important;
+}
+
+/* Focus outlines (theme-aware) */
+.rs-btn:focus,
+.rs-picker-toggle:focus {
+  outline: 2px solid var(--datepicker-border) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px var(--datepicker-shadow) !important;
+}
+
+/* Small visual polish: ensure content inside cells uses theme foreground */
+.rs-calendar-table-cell-content {
+  color: var(--datepicker-foreground) !important;
+}
+
+/* Ensure selected cells set text color on child elements too */
+.rs-calendar-table-cell-selected-start .rs-calendar-table-cell-content *,
+.rs-calendar-table-cell-selected-end .rs-calendar-table-cell-content * {
+  color: var(--datepicker-active-fg) !important;
+}

@@ -1,14 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { colors } from "@/config/theme";
+import SensorsVideoIntro from "@/app/component/app-sensors/SensorsVideoIntro";
 
 export default function WarehouseExperiencePage() {
+  const [showVideo, setShowVideo] = useState(true);
+
   return (
     <div
       className="min-h-screen text-white relative"
       style={{ backgroundColor: colors.background }}
     >
+      <SensorsVideoIntro
+        show={showVideo}
+        onSkip={() => setShowVideo(false)}
+        title="Warehouse Experience"
+        subtitle="Experience inventory tracking, asset management, and logistics optimization."
+        buttonLabel="Enter"
+        accentColor={colors.orange}
+      />
+
       {/* Header */}
       <header className="relative z-10 pt-8 pb-4 px-8">
         <Link

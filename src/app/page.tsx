@@ -2,12 +2,12 @@
 
 import { useRef } from "react";
 import { colors } from "@/config/theme";
-import { FixedGradientBackground } from "@/components/FixedGradientBackground";
-import { LiveBackground } from "@/components/LiveBackground";
-import { NavigationDots } from "@/components/NavigationDots";
-import { HeroSection } from "@/components/HeroSection";
-import { WhatIsThingsXSection } from "@/components/WhatIsThingsXSection";
-import { WhyItWinsSection } from "@/components/WhyItWinsSection";
+import { FixedGradientBackground } from "@/app/component/FixedGradientBackground";
+import { LiveBackground } from "@/app/component/LiveBackground";
+import { NavigationDots } from "@/app/component/NavigationDots";
+import { HeroSection } from "@/app/component/HeroSection";
+import { WhatIsThingsXSection } from "@/app/component/WhatIsThingsXSection";
+import { WhyItWinsSection } from "@/app/component/WhyItWinsSection";
 import { useScrollTracking } from "@/hooks/useScrollTracking";
 
 export default function Home() {

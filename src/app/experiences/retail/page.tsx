@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
 import { colors } from "@/config/theme";
 import { Toaster, toast } from "sonner";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { AppTabs, TabItem } from "@/components/AppTabs";
 import { getCameras, getVideoFeedV2, CameraStream, StreamConfig, ModelConfig } from "@/app/services/realtime/realtime";
 import {
   getDeviceCategories,
@@ -36,155 +34,41 @@ import {
   LayoutData,
 } from "@/app/services/layout/layout";
 import { getSiteId } from "@/config/site";
-import DateTimePicker from "@/components/DateTimePicker";
+import SensorsVideoIntro from "@/app/component/app-sensors/SensorsVideoIntro";
+import RetailHeader from "@/app/component/app-retail/RetailHeader";
+import RetailStreamTab from "@/app/component/app-retail/RetailStreamTab";
+import RetailEpdTab from "@/app/component/app-retail/RetailEpdTab";
+import RetailAnalyticsTab from "@/app/component/app-retail/RetailAnalyticsTab";
+import RetailCustomDropdown from "@/app/component/app-retail/RetailCustomDropdown";
+import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
+import type { DropdownOption, SelectedZone } from "@/app/component/app-retail/types";
 
 // ===========================================
 // Page Accent Color
 // ===========================================
 
 const accent = colors.retailAccent;
+const CustomDropdown = RetailCustomDropdown;
 
 // ===========================================
 // Types
 // ===========================================
 
-type ActiveTab = "stream" | "epd" | "analytics";
+type ActiveTab = (typeof TABS)[keyof typeof TABS];
 
-interface DropdownOption {
-  value: string;
-  label: string;
-}
+type AnalyticsType = "zone" | "product";
 
 // ===========================================
 // Tab Configuration
 // ===========================================
 
-const TABS: TabItem[] = [
-  { id: "stream", label: "Video Streams", icon: "📹" },
-  { id: "epd", label: "Bulk Updates", icon: "🏷️" },
-  { id: "analytics", label: "Analytics", icon: "📊" },
-];
+const TABS = {
+  stream: "Video Streams",
+  epd: "Bulk Updates",
+  analytics: "Analytics",
+} as const;
 
 const templateDevicePrefixes = ["EN0006", "EN0007", "EN0008"];
-
-// ===========================================
-// Custom Dropdown Component
-// ===========================================
-
-function CustomDropdown({
-  label,
-  value,
-  options,
-  onChange,
-  placeholder = "Select...",
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  options: DropdownOption[];
-  onChange: (value: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectedOption = options.find((opt) => opt.value === value);
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <label className="block text-sm mb-2 font-medium" style={{ color: colors.textMuted }}>
-        {label}
-      </label>
-      <button
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className="w-full px-4 py-3 rounded-xl text-left transition-all flex items-center justify-between gap-2 group"
-        style={{
-          backgroundColor: isOpen ? `${accent}10` : colors.background,
-          border: `2px solid ${isOpen ? accent : colors.border}`,
-          color: selectedOption ? colors.text : colors.textMuted,
-          opacity: disabled ? 0.5 : 1,
-          cursor: disabled ? "not-allowed" : "pointer",
-        }}
-      >
-        <span className="truncate">{selectedOption?.label || placeholder}</span>
-        <svg
-          className={`w-5 h-5 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke={isOpen ? accent : colors.textMuted}
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && !disabled && (
-        <div
-          className="absolute z-50 mt-2 w-full rounded-xl overflow-hidden shadow-2xl"
-          style={{
-            backgroundColor: colors.backgroundCard,
-            border: `2px solid ${accent}40`,
-            maxHeight: "300px",
-            overflowY: "auto",
-          }}
-        >
-          {options.length === 0 ? (
-            <div className="px-4 py-3 text-center" style={{ color: colors.textMuted }}>
-              No options available
-            </div>
-          ) : (
-            options.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-3 text-left transition-all flex items-center gap-3 group"
-                style={{
-                  backgroundColor: option.value === value ? `${accent}20` : "transparent",
-                  color: colors.text,
-                }}
-                onMouseEnter={(e) => {
-                  if (option.value !== value) {
-                    e.currentTarget.style.backgroundColor = `${accent}10`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (option.value !== value) {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                  }
-                }}
-              >
-                <div
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{
-                    backgroundColor: option.value === value ? accent : "transparent",
-                    border: `2px solid ${option.value === value ? accent : colors.border}`,
-                  }}
-                />
-                <span className="truncate">{option.label}</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ===========================================
 // Main Component
@@ -196,7 +80,7 @@ export default function RetailExperiencePage() {
 
   // Page state
   const [showVideo, setShowVideo] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("stream");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS.stream);
 
   // Stream state
   const [cameras, setCameras] = useState<CameraStream[]>([]);
@@ -229,7 +113,7 @@ export default function RetailExperiencePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Analytics state
-  const [analyticsType, setAnalyticsType] = useState<"zone" | "product">("zone");
+  const [analyticsType, setAnalyticsType] = useState<AnalyticsType>("zone");
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [zoneHeatmapData, setZoneHeatmapData] = useState<ZoneHeatmapData[]>([]);
   const [productInteractionData, setProductInteractionData] = useState<ProductInteractionData[]>([]);
@@ -239,7 +123,7 @@ export default function RetailExperiencePage() {
     startDate: "",
     endDate: "",
   });
-  const [selectedZone, setSelectedZone] = useState<{ id: string | null; name: string | null }>({
+  const [selectedZone, setSelectedZone] = useState<SelectedZone>({
     id: null,
     name: null,
   });
@@ -285,7 +169,7 @@ export default function RetailExperiencePage() {
       }
     }
 
-    if (activeTab === "stream") {
+    if (activeTab === TABS.stream) {
       loadCameras();
     }
   }, [isAuthenticated, authLoading, showVideo, activeTab]);
@@ -304,7 +188,7 @@ export default function RetailExperiencePage() {
       }
     }
 
-    if (activeTab === "epd") {
+    if (activeTab === TABS.epd) {
       loadCategories();
     }
   }, [isAuthenticated, authLoading, showVideo, activeTab, selectedSiteId]);
@@ -352,7 +236,7 @@ export default function RetailExperiencePage() {
 
   const fetchHeatmapData = useCallback(async () => {
     if (!isAuthenticated || authLoading || showVideo) return;
-    if (activeTab !== "analytics") return;
+    if (activeTab !== TABS.analytics) return;
 
     setAnalyticsLoading(true);
     try {
@@ -389,7 +273,7 @@ export default function RetailExperiencePage() {
   // Load layout + heatmap data when analytics tab opens
   useEffect(() => {
     if (!isAuthenticated || authLoading || showVideo) return;
-    if (activeTab !== "analytics") return;
+    if (activeTab !== TABS.analytics) return;
 
     async function loadLayoutAndData() {
       try {
@@ -822,42 +706,7 @@ export default function RetailExperiencePage() {
   // Render: Video Intro
   // ===========================================
 
-  function renderVideoIntro() {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: colors.background }}>
-        <div className="relative w-full max-w-5xl mx-8">
-          <div className="relative aspect-video rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `2px solid ${accent}30` }}>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center p-8">
-                <div className="w-32 h-32 mx-auto mb-8 rounded-full flex items-center justify-center relative" style={{ backgroundColor: `${accent}20` }}>
-                  <svg viewBox="0 0 24 24" fill={accent} className="w-16 h-16">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{ backgroundColor: accent }} />
-                </div>
-                <h2 className="text-4xl font-bold mb-4" style={{ color: accent }}>Retail Simulation</h2>
-                <p className="text-xl mb-2" style={{ color: colors.text }}>Smart Store Management</p>
-                <p className="max-w-2xl mx-auto" style={{ color: colors.textMuted }}>
-                  Experience real-time video streaming with model selection and EPD bulk updates.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setShowVideo(false)}
-            className="absolute bottom-6 right-6 px-8 py-4 rounded-full font-bold text-lg transition-all duration-300 flex items-center gap-3 group"
-            style={{ backgroundColor: accent, color: colors.background }}
-          >
-            <span>Enter</span>
-            <svg className="w-6 h-6 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  }
+  
 
   // ===========================================
   // Render: Stream Tab
@@ -931,6 +780,7 @@ export default function RetailExperiencePage() {
                 options={streamOptions}
                 onChange={handleStreamSelect}
                 placeholder="Choose a stream..."
+                accent={accent}
               />
 
               <CustomDropdown
@@ -940,6 +790,7 @@ export default function RetailExperiencePage() {
                 onChange={handleModelSelect}
                 placeholder="Choose a model..."
                 disabled={!selectedStreamId}
+                accent={accent}
               />
 
               <div className="flex flex-col">
@@ -1115,6 +966,7 @@ export default function RetailExperiencePage() {
                   setHasUploadedCsv(false);
                 }}
                 placeholder="Choose category..."
+                accent={accent}
               />
 
               <CustomDropdown
@@ -1124,6 +976,7 @@ export default function RetailExperiencePage() {
                 onChange={setSelectedConfig}
                 placeholder="Choose config..."
                 disabled={!selectedCategory}
+                accent={accent}
               />
 
               {requiresTemplate && (
@@ -1134,6 +987,7 @@ export default function RetailExperiencePage() {
                   onChange={setSelectedTemplateId}
                   placeholder="Choose template..."
                   disabled={!selectedCategory}
+                  accent={accent}
                 />
               )}
 
@@ -1306,12 +1160,11 @@ export default function RetailExperiencePage() {
           style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}
         >
           <DateTimePicker
-            onChange={handleDatePickerChange}
-            onSubmit={fetchHeatmapData}
-            accentColor={accent}
+            onchange={handleDatePickerChange}
+            onsubmit={fetchHeatmapData}
           />
           <p className="text-xs" style={{ color: colors.textMuted }}>
-            Pick a date-time range and click Apply to refresh heatmaps.
+            Pick a date-time range and click Submit to refresh heatmaps.
           </p>
         </div>
 
@@ -1677,40 +1530,100 @@ export default function RetailExperiencePage() {
     <div className="min-h-screen text-white relative" style={{ backgroundColor: colors.background }}>
       <Toaster position="top-right" richColors />
 
-      {showVideo && renderVideoIntro()}
+      <SensorsVideoIntro
+        show={showVideo}
+        onSkip={() => setShowVideo(false)}
+        title="Retail Simulation"
+        subtitle="Experience real-time video streaming with model selection and EPD bulk updates."
+        buttonLabel="Enter"
+        accentColor={accent}
+      />
 
       <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
-        {/* Header */}
-        <header className="sticky top-0 z-40 px-8 py-4" style={{ backgroundColor: `${colors.background}ee`, backdropFilter: "blur(10px)" }}>
-          <div className="flex items-center justify-between">
-            <Link href="/experiences" className="inline-flex items-center gap-2 text-sm transition-colors duration-300 group" style={{ color: colors.textMuted }}>
-              <svg className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span className="group-hover:text-white">Back</span>
-            </Link>
-
-            <h1 className="text-xl font-bold" style={{ color: accent }}>Retail Simulation</h1>
-
-            <div className="w-20" />
-          </div>
-        </header>
-
-        {/* Tab Navigation */}
-        <div className="px-8 py-4">
-          <AppTabs
-            tabs={TABS}
-            activeTab={activeTab}
-            onTabChange={(id) => setActiveTab(id as ActiveTab)}
-            accentColor={accent}
-          />
-        </div>
+        <RetailHeader
+          accent={accent}
+          tabs={Object.values(TABS)}
+          defaultTab={TABS.stream}
+          onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+          accentColor={accent}
+        />
 
         {/* Content */}
         <main className="px-8 py-6">
-          {activeTab === "stream" && renderStreamTab()}
-          {activeTab === "epd" && renderEPDTab()}
-          {activeTab === "analytics" && renderAnalyticsTab()}
+          {activeTab === TABS.stream && (
+            <RetailStreamTab
+              accent={accent}
+              camerasLoading={camerasLoading}
+              cameras={cameras}
+              selectedCamera={selectedCamera}
+              selectedStreamId={selectedStreamId}
+              selectedModel={selectedModel}
+              streamOptions={streamOptions}
+              modelOptions={modelOptions}
+              onCameraSelect={handleCameraSelect}
+              onStreamSelect={handleStreamSelect}
+              onModelSelect={handleModelSelect}
+              onStartStream={startStream}
+              onStopStream={stopStream}
+              videoStatus={videoStatus}
+              videoUrl={videoUrl}
+              videoErrorMessage={videoErrorMessage}
+              onOpenVideo={() => window.open(videoUrl, "_blank")}
+            />
+          )}
+          {activeTab === TABS.epd && (
+            <RetailEpdTab
+              accent={accent}
+              deviceCategories={deviceCategories}
+              deviceConfigOptions={deviceConfigOptions}
+              eslTemplates={eslTemplates}
+              selectedCategory={selectedCategory}
+              selectedConfig={selectedConfig}
+              selectedTemplateId={selectedTemplateId}
+              onCategoryChange={(value) => {
+                setSelectedCategory(value);
+                setSelectedConfig("");
+                setSelectedTemplateId("");
+                setBulkDevices([]);
+                setBulkColumns([]);
+                setNestedObjectType("");
+                setHasUploadedCsv(false);
+              }}
+              onConfigChange={setSelectedConfig}
+              onTemplateChange={setSelectedTemplateId}
+              onLoadBulkDevices={loadBulkDevices}
+              bulkDevices={bulkDevices}
+              bulkColumns={bulkColumns}
+              bulkLoading={bulkLoading}
+              templateDevicePrefixes={templateDevicePrefixes}
+              nestedObjectType={nestedObjectType}
+              hasUploadedCsv={hasUploadedCsv}
+              onDownloadCsv={handleDownloadCsv}
+              onUploadCsv={handleUploadCsv}
+              onPushAllUpdates={pushAllUpdates}
+              fileInputRef={fileInputRef}
+            />
+          )}
+          {activeTab === TABS.analytics && (
+            <RetailAnalyticsTab
+              accent={accent}
+              analyticsType={analyticsType}
+              onAnalyticsTypeChange={handleAnalyticsTypeChange}
+              onDateRangeChange={handleDatePickerChange}
+              onSubmit={fetchHeatmapData}
+              analyticsLoading={analyticsLoading}
+              zoneHeatmapData={zoneHeatmapData}
+              productInteractionData={productInteractionData}
+              heatmapRange={heatmapRange}
+              layoutData={layoutData}
+              getCountValue={getCountValue}
+              onZoneClick={handleZoneClick}
+              isZoneDrawerOpen={isZoneDrawerOpen}
+              selectedZone={selectedZone}
+              selectedZoneData={selectedZoneData}
+              onCloseDrawer={() => setIsZoneDrawerOpen(false)}
+            />
+          )}
         </main>
       </div>
     </div>
