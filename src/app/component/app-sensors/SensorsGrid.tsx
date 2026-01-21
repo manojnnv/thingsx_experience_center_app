@@ -38,6 +38,7 @@ function SensorsGrid({
             </div>
             <p className="text-xs font-mono mb-1 truncate" style={{ color: colors.textMuted }}>{device.tin}</p>
             <p className="text-sm font-medium truncate" style={{ color: colors.text }}>{device.name}</p>
+            <p className="text-xs truncate" style={{ color: colors.textMuted }}>{device.type}</p>
             <p className="text-lg font-bold mt-1" style={{ color: colors.yellow }}>
               {displayValue !== null && displayValue !== undefined ? displayValue.toFixed(1) : "--"}{" "}
               <span className="text-xs font-normal">{device.unit}</span>
