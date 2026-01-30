@@ -7,6 +7,7 @@
 
 import { api } from "@/app/utils/api";
 import { toast } from "sonner";
+import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 // Types
 export interface EPDDevice {
@@ -33,68 +34,75 @@ export interface BulkUpdatePayload {
 /**
  * Get all EPD devices
  */
-export const getAllEPDDevices = async (): Promise<EPDDevice[]> => {
+export const getAllEPDDevices = async (): Promise<ServiceResult<EPDDevice[]>> => {
   try {
     const resp = await api.post("/v1/device/device_specific", {
       device_category: "E-Paper Endnode",
     });
-    return resp?.data?.data || [];
+    return ok(resp?.data?.data || []);
   } catch (error) {
     console.error("Error fetching EPD devices:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch EPD devices"));
   }
 };
 
 /**
  * Get device categories for filtering
  */
-export const getDeviceCategories = async (): Promise<string[]> => {
+export const getDeviceCategories = async (): Promise<ServiceResult<string[]>> => {
   try {
     const resp = await api.post("/v1/device/categories", {
       site_id: localStorage.getItem("site_id"),
     });
-    return resp?.data?.data || [];
+    return ok(resp?.data?.data || []);
   } catch (error) {
     console.error("Error fetching device categories:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch device categories"));
   }
 };
 
 /**
  * Get device config options for a category
  */
-export const getDeviceConfigOptions = async (deviceCode: string): Promise<Record<string, unknown>[]> => {
+export const getDeviceConfigOptions = async (
+  deviceCode: string
+): Promise<ServiceResult<Record<string, unknown>[]>> => {
   try {
     const resp = await api.post("v1/device/config/options", {
       device_code: deviceCode,
     });
     toast.message(resp?.data?.message);
-    return resp?.data?.data || [];
+    return ok(resp?.data?.data || []);
   } catch (error) {
     console.error("Error fetching device config options:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch device config options"));
   }
 };
 
 /**
  * Get current config/values for a specific device
  */
-export const getDeviceCurrentConfig = async (tin: string): Promise<Record<string, unknown> | null> => {
+export const getDeviceCurrentConfig = async (
+  tin: string
+): Promise<ServiceResult<Record<string, unknown> | null>> => {
   try {
     const resp = await api.post("v1/device/config/get", {
       tin,
     });
-    return resp?.data?.data?.schema || resp?.data?.data;
+    return ok(resp?.data?.data?.schema || resp?.data?.data || null);
   } catch (error) {
     console.error("Error fetching device config:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch device config"));
   }
 };
 
 /**
  * Update individual EPD value
  */
-export const updateEPDValue = async (tin: string, data: Record<string, unknown>): Promise<{ status: string; message: string }> => {
+export const updateEPDValue = async (
+  tin: string,
+  data: Record<string, unknown>
+): Promise<ServiceResult<{ status?: string; message?: string }>> => {
   try {
     const resp = await api.post("v1/device/config/update", {
       tin,
@@ -107,18 +115,20 @@ export const updateEPDValue = async (tin: string, data: Record<string, unknown>)
       toast.success(resp?.data?.message || "EPD updated successfully");
     }
 
-    return resp?.data;
+    return ok(resp?.data);
   } catch (error) {
     console.error("Error updating EPD value:", error);
     toast.error("Failed to update EPD");
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to update EPD"));
   }
 };
 
 /**
  * Bulk update EPD values
  */
-export const bulkUpdateEPD = async (updates: BulkUpdatePayload[]): Promise<{ status: string; message: string }> => {
+export const bulkUpdateEPD = async (
+  updates: BulkUpdatePayload[]
+): Promise<ServiceResult<{ status?: string; message?: string }>> => {
   try {
     const resp = await api.post("/v1/device/bulk/update", {
       data: updates,
@@ -130,11 +140,11 @@ export const bulkUpdateEPD = async (updates: BulkUpdatePayload[]): Promise<{ sta
       toast.success(resp?.data?.message || "Bulk update successful");
     }
 
-    return resp?.data;
+    return ok(resp?.data);
   } catch (error) {
     console.error("Error in bulk update:", error);
     toast.error("Bulk update failed");
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Bulk update failed"));
   }
 };
 
@@ -144,7 +154,7 @@ export const bulkUpdateEPD = async (updates: BulkUpdatePayload[]): Promise<{ sta
 export const retrieveDevicesForBulk = async (
   deviceCode: string,
   configOption: string
-): Promise<EPDDevice[]> => {
+): Promise<ServiceResult<EPDDevice[]>> => {
   try {
     const resp = await api.post("/v1/device/bulk/retrieve", {
       device_code: deviceCode,
@@ -152,24 +162,26 @@ export const retrieveDevicesForBulk = async (
       site_id: localStorage.getItem("site_id"),
     });
     toast.message(resp?.data?.message);
-    return resp?.data?.data?.content || [];
+    return ok(resp?.data?.data?.content || []);
   } catch (error) {
     console.error("Error retrieving devices for bulk:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to retrieve bulk devices"));
   }
 };
 
 /**
  * Get device details
  */
-export const getEPDDetails = async (tin: string): Promise<EPDDevice | null> => {
+export const getEPDDetails = async (
+  tin: string
+): Promise<ServiceResult<EPDDevice | null>> => {
   try {
     const resp = await api.post("/v1/device/details", {
       tin,
     });
-    return resp?.data?.data;
+    return ok(resp?.data?.data ?? null);
   } catch (error) {
     console.error("Error fetching EPD details:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch EPD details"));
   }
 };

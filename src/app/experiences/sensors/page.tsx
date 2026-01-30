@@ -10,18 +10,24 @@ import {
   epdColorMap,
   EPDConfig,
 } from "@/config/devices";
-import { pollSensorData, SensorLiveReading } from "@/app/services/sensors/sensors";
+import {
+  fetchDevicesByDeviceCodes,
+  fetchSensorMetrics,
+  pollSensorData,
+  SensorLiveReading,
+} from "@/app/services/sensors/sensors";
 import { updateEPDValue, bulkUpdateEPD, BulkUpdatePayload } from "@/app/services/epd/epd";
 import { Toaster } from "sonner";
 import { useAuth } from "@/app/providers/AuthProvider";
-import SensorsVideoIntro from "@/app/component/app-sensors/SensorsVideoIntro";
-import SensorsHeader from "@/app/component/app-sensors/SensorsHeader";
-import SensorsLoading from "@/app/component/app-sensors/SensorsLoading";
-import SensorsGrid from "@/app/component/app-sensors/SensorsGrid";
-import SensorsTopology from "@/app/component/app-sensors/SensorsTopology";
-import SensorsEpdControl from "@/app/component/app-sensors/SensorsEpdControl";
-import SensorsSelectedDevicePanel from "@/app/component/app-sensors/SensorsSelectedDevicePanel";
-import type { DisplayDevice, SensorLiveData, EPDFieldValues } from "@/app/component/app-sensors/types";
+import VideoIntro from "@/app/component/app-experience/VideoIntro";
+import SensorsHeader from "@/app/component/app-experience/SensorsHeader";
+import SensorsLoading from "@/app/component/app-experience/SensorsLoading";
+import SensorsGrid from "@/app/component/app-experience/SensorsGrid";
+import SensorsTopology from "@/app/component/app-experience/SensorsTopology";
+import SensorsEpdControl from "@/app/component/app-experience/SensorsEpdControl";
+import SensorsSelectedDevicePanel from "@/app/component/app-experience/SensorsSelectedDevicePanel";
+import AppSheet from "@/app/component/app-sheet/AppSheet";
+import type { DisplayDevice, SensorLiveData, EPDFieldValues } from "@/app/component/app-experience/types";
 
 // Constants
 const SENSOR_TIMEOUT_MS = 10000; // 10 seconds
@@ -63,12 +69,34 @@ function Page() {
     const loadDevices = async () => {
       setLoading(true);
       try {
+        const deviceCodes = Array.from(
+          new Set(sensorsDeviceTins.map((config) => config.tin.slice(0, 6)))
+        );
+        const apiDevicesResult = await fetchDevicesByDeviceCodes(deviceCodes);
+        if (apiDevicesResult.error) {
+          console.warn("Failed to load device metadata:", apiDevicesResult.error);
+        }
+        const apiDevices = apiDevicesResult.data || [];
+        const apiByTin = new Map(apiDevices.map((d) => [d.tin, d]));
+
+        const normalizeCategoryKey = (deviceType?: string) => {
+          if (!deviceType) return "sensor";
+          return deviceType
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        };
+
         const deviceList: DisplayDevice[] = sensorsDeviceTins.map((config) => {
-          const category = config.category || "sensor";
-          const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+          const apiDevice = apiByTin.get(config.tin);
+          const category =
+            config.category || normalizeCategoryKey(apiDevice?.device_type) || "sensor";
+          const categoryInfo =
+            categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
           return {
             tin: config.tin,
-            name: config.displayName || "Sensor",
+            name: config.displayName || apiDevice?.device_name || "Sensor",
             type: categoryInfo.label,
             category,
             status: "offline",
@@ -76,7 +104,36 @@ function Page() {
             unit: categoryInfo.unit,
           };
         });
-        setDevices(deviceList);
+        const end = new Date();
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        let metricsByTin: Record<string, { timestamp: string; value: number; unit?: string }[]> = {};
+        const metricsResult = await fetchSensorMetrics(
+          deviceList.map((device) => device.tin),
+          start.toISOString(),
+          end.toISOString()
+        );
+        if (metricsResult.error) {
+          console.warn("Failed to load sensor metrics:", metricsResult.error);
+        } else {
+          metricsByTin = metricsResult.data || {};
+        }
+
+        const deviceListWithReadings = deviceList.map((device) => {
+          const metrics = metricsByTin[device.tin];
+          if (metrics && metrics.length > 0) {
+            const latest = metrics[metrics.length - 1];
+            return {
+              ...device,
+              lastReading: latest.value,
+              unit: latest.unit || device.unit,
+              lastReceivedAt: latest.timestamp ? new Date(latest.timestamp) : null,
+            };
+          }
+          return device;
+        });
+
+        setDevices(deviceListWithReadings);
       } finally {
         setLoading(false);
       }
@@ -99,9 +156,9 @@ function Page() {
   // Poll for real sensor data
   const pollForData = async () => {
     setIsPolling(true);
-    const { readings, error } = await pollSensorData();
+    const pollResult = await pollSensorData(SENSOR_TIMEOUT_MS);
     
-    if (error) {
+    if (pollResult.error) {
       setPollingError("Connection error. Retrying...");
       setIsPolling(false);
       return;
@@ -110,6 +167,7 @@ function Page() {
     setPollingError(null);
     setLastPollTime(new Date());
     
+    const readings = pollResult.data || [];
     if (readings.length > 0) {
       setConnectedSensors((prev) => {
         const updated = new Map(prev);
@@ -124,7 +182,7 @@ function Page() {
             unit: reading.unit,
             displayName: reading.displayName,
             category: reading.category,
-            lastReceivedAt: new Date(),
+            lastReceivedAt: reading.timestamp,
             history: [...history, reading.value].slice(-30),
           });
         });
@@ -137,7 +195,13 @@ function Page() {
         prev.map((device) => {
           const reading = readings.find((r) => r.tin === device.tin);
           if (reading) {
-            return { ...device, status: "online", lastReading: reading.value };
+            return {
+              ...device,
+              status: "online",
+              lastReading: reading.value,
+              unit: reading.unit || device.unit,
+              lastReceivedAt: reading.timestamp ? new Date(reading.timestamp) : new Date(),
+            };
           }
           return device;
         })
@@ -222,11 +286,21 @@ function Page() {
   // Tab configuration for AppTabs component
   const tabs = Object.values(TABS);
 
+  const accent = colors.sensorAccent ?? colors.yellow;
+  const gridColor = `${(accent || "").trim()}12`;
+
   return (
-    <div className="min-h-screen text-white relative" style={{ backgroundColor: colors.background }}>
+    <div
+      className="min-h-screen text-white relative"
+      style={{
+        backgroundColor: colors.background,
+        backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
+        backgroundSize: "32px 32px",
+      }}
+    >
       <Toaster position="top-right" richColors />
 
-      <SensorsVideoIntro show={showVideo} onSkip={skipVideo} />
+      <VideoIntro show={showVideo} onSkip={skipVideo} />
 
       {/* Main Content */}
       <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
@@ -248,6 +322,8 @@ function Page() {
               connectedSensors={connectedSensors}
               selectedDevice={selectedDevice}
               onSelectDevice={setSelectedDevice}
+              onClose={() => setSelectedDevice(null)}
+              centralEndnode={centralEndnode}
             />
           )}
 
@@ -276,14 +352,26 @@ function Page() {
           )}
         </main>
 
-        {/* Selected Device Panel */}
-        {selectedDevice && (activeTab === TABS.grid || activeTab === TABS.topology) && (
-          <SensorsSelectedDevicePanel
-            selectedDevice={selectedDevice}
-            connectedSensors={connectedSensors}
-            centralEndnode={centralEndnode}
-            onClose={() => setSelectedDevice(null)}
-          />
+        {/* Selected Device Panel (Topology) */}
+        {selectedDevice && activeTab === TABS.topology && (
+          <AppSheet
+            open={Boolean(selectedDevice)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setSelectedDevice(null);
+              }
+            }}
+            title="Device Details"
+            id={selectedDevice?.tin}
+            accentColor={colors.yellow}
+          >
+            <SensorsSelectedDevicePanel
+              selectedDevice={selectedDevice}
+              connectedSensors={connectedSensors}
+              centralEndnode={centralEndnode}
+              onClose={() => setSelectedDevice(null)}
+            />
+          </AppSheet>
         )}
       </div>
     </div>

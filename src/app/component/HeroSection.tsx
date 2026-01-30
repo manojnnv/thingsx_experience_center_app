@@ -27,14 +27,6 @@ export function HeroSection() {
       easing: "easeOutCubic",
     });
 
-    animate(".hero-accent", {
-      opacity: [0, 1],
-      scale: [0.8, 1],
-      duration: 600,
-      delay: 200,
-      easing: "easeOutBack",
-    });
-
     animate(".hero-title-word", {
       opacity: [0, 1],
       translateY: [30, 0],
@@ -43,11 +35,11 @@ export function HeroSection() {
       easing: "easeOutCubic",
     });
 
-    animate(".hero-description", {
+    animate(".hero-subtitle", {
       opacity: [0, 1],
       translateY: [20, 0],
       duration: 800,
-      delay: 600,
+      delay: 500,
       easing: "easeOutCubic",
     });
   }, []);
@@ -60,13 +52,13 @@ export function HeroSection() {
     >
       {/* Header */}
       <header className="flex items-center justify-between px-8 md:px-16 py-8">
-        <div className="hero-logo-left opacity-0">
+        <div className="hero-logo-left" style={{ opacity: 0 }}>
           <span className="text-2xl md:text-3xl tracking-tight font-semibold">
             intello<span style={{ color: colors.primary }}>bots</span>
           </span>
         </div>
 
-        <div className="hero-logo-right opacity-0 text-right">
+        <div className="hero-logo-right text-right" style={{ opacity: 0 }}>
           <span
             className="text-2xl md:text-3xl tracking-tight font-semibold"
             style={{ color: colors.text }}
@@ -84,48 +76,31 @@ export function HeroSection() {
 
       {/* Main Hero Content */}
       <main className="flex-1 flex items-center justify-center px-8 md:px-16 py-12">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="hero-accent opacity-0 flex items-center justify-center gap-4 mb-6">
-            <div
-              className="h-[2px] w-16"
-              style={{ backgroundColor: colors.primary }}
-            />
-            <span
-              className="text-sm font-medium tracking-wider uppercase"
-              style={{ color: colors.primary }}
-            >
-              Experience Center
+        <div className="max-w-4xl mx-auto text-center -mt-20">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.1] mb-6">
+            <span className="hero-title-word inline-block" style={{ opacity: 0 }}>
+              Welcome to the
             </span>
-            <div
-              className="h-[2px] w-16"
-              style={{ backgroundColor: colors.primary }}
-            />
-          </div>
-
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-8">
-            <span className="hero-title-word opacity-0 inline-block">
-              Where
-            </span>{" "}
-            <span className="hero-title-word opacity-0 inline-block">IoT</span>
             <br />
-            <span className="hero-title-word opacity-0 inline-block">
-              Becomes
+            <span className="hero-title-word inline-block" style={{ opacity: 0 }}>
+              Intellobots
             </span>{" "}
             <span
-              className="hero-title-word opacity-0 inline-block"
-              style={{ color: colors.primary }}
+              className="hero-title-word inline-block"
+              style={{ color: colors.primary, opacity: 0 }}
             >
-              Tangible
+              Experience Centre
             </span>
           </h1>
 
           <p
-            className="hero-description opacity-0 text-xl leading-relaxed mb-10 max-w-2xl mx-auto"
-            style={{ color: colors.textMuted }}
+            className="hero-subtitle text-xl md:text-2xl"
+            style={{ color: colors.textMuted, opacity: 0 }}
           >
-            Walk through live demonstrations of industrial intelligence. Touch
-            the hardware. See the data. Experience the future of connected
-            operations.
+            Powered by{" "}
+            <span style={{ color: colors.primary, fontWeight: 600 }}>
+              ThingsX
+            </span>
           </p>
         </div>
       </main>

@@ -10,6 +10,7 @@
 import { api } from "@/app/utils/api";
 import { getSiteId } from "@/config/site";
 import { toast } from "sonner";
+import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 // ===========================================
 // Types
@@ -47,7 +48,7 @@ export interface VideoFeedResponse {
 /**
  * Get all camera streams for a site
  */
-async function getCameras(siteId?: string): Promise<{ data: CameraStream[] | null; error: string | null }> {
+async function getCameras(siteId?: string): Promise<ServiceResult<CameraStream[]>> {
   try {
     const resp = await api.post("/v1/feed/get_camera_streams", {
       site_id: siteId || getSiteId(),
@@ -132,10 +133,10 @@ async function getCameras(siteId?: string): Promise<{ data: CameraStream[] | nul
       };
     });
     
-    return { data: normalizedCameras, error: null };
+    return ok(normalizedCameras);
   } catch (error) {
     console.error("Error fetching cameras:", error);
-    return { data: null, error: "Failed to fetch cameras" };
+    return fail(getErrorMessage(error, "Failed to fetch cameras"));
   }
 }
 
@@ -151,7 +152,7 @@ async function getVideoFeedV2(
   stream: boolean,
   streamId: string,
   modelId: string | number
-): Promise<{ data: VideoFeedResponse | null; error: string | null }> {
+): Promise<ServiceResult<VideoFeedResponse>> {
   try {
     // API requires model_id field with numeric ID
     const resp = await api.post("/v1/feed/get_feed_v2", {
@@ -173,7 +174,7 @@ async function getVideoFeedV2(
     console.log("Video feed response:", responseData);
     console.log("Parsed result:", result);
     
-    return { data: result, error: null };
+    return ok(result);
   } catch (error: unknown) {
     console.error("Error with video feed:", error);
     // Extract error message from API response
@@ -182,7 +183,7 @@ async function getVideoFeedV2(
       const axiosError = error as { response?: { data?: { message?: string } } };
       errorMessage = axiosError.response?.data?.message || errorMessage;
     }
-    return { data: null, error: errorMessage };
+    return fail(errorMessage);
   }
 }
 
@@ -192,7 +193,7 @@ async function getVideoFeedV2(
 async function getVideoFeed(
   tin: string,
   stream: boolean
-): Promise<{ data: VideoFeedResponse | null; error: string | null }> {
+): Promise<ServiceResult<VideoFeedResponse>> {
   try {
     const resp = await api.post("/v1/feed", {
       device_tin: tin,
@@ -203,10 +204,10 @@ async function getVideoFeed(
       toast.message(resp.data.message);
     }
     
-    return { data: resp?.data?.data || resp?.data, error: null };
+    return ok(resp?.data?.data || resp?.data);
   } catch (error) {
     console.error("Error with video feed:", error);
-    return { data: null, error: "Failed to control video feed" };
+    return fail(getErrorMessage(error, "Failed to control video feed"));
   }
 }
 

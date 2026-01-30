@@ -80,13 +80,35 @@ const experiences: ExperienceTile[] = [
       </svg>
     ),
   },
+  {
+    id: "innovation-lab",
+    title: "Innovation Lab",
+    description: "Explore cutting-edge IoT solutions and intelligent automation with Intellobots",
+    href: "/experiences/innovation-lab",
+    accentColor: colors.primary,
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="w-12 h-12"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.318H4.765c-1.718 0-2.3-2.086-1.067-3.318L5 14.5"
+        />
+      </svg>
+    ),
+  },
 ];
 
 function ExperiencesTiles() {
   const [hoveredTile, setHoveredTile] = useState<string | null>(null);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 w-full max-w-6xl">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 w-full max-w-6xl">
       {experiences.map((exp) => (
         <Link
           key={exp.id}
@@ -96,7 +118,7 @@ function ExperiencesTiles() {
           onMouseLeave={() => setHoveredTile(null)}
         >
           <div
-            className="relative h-full p-8 rounded-2xl transition-all duration-500 overflow-hidden"
+            className="relative h-full flex flex-col p-8 rounded-2xl transition-all duration-500 overflow-hidden"
             style={{
               backgroundColor: colors.backgroundCard,
               border: `1px solid ${
@@ -128,40 +150,43 @@ function ExperiencesTiles() {
               }}
             />
 
-            {/* Icon */}
-            <div
-              className="mb-6 transition-all duration-500"
-              style={{
-                color:
-                  hoveredTile === exp.id
-                    ? exp.accentColor
-                    : colors.textMuted,
-              }}
-            >
-              {exp.icon}
+            {/* Top content: icon, title, description — grows to push Explore to bottom */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              {/* Icon */}
+              <div
+                className="mb-6 transition-all duration-500 shrink-0"
+                style={{
+                  color:
+                    hoveredTile === exp.id
+                      ? exp.accentColor
+                      : colors.textMuted,
+                }}
+              >
+                {exp.icon}
+              </div>
+
+              {/* Title */}
+              <h2
+                className="text-xl lg:text-2xl font-bold mb-3 transition-colors duration-300 shrink-0"
+                style={{
+                  color: hoveredTile === exp.id ? exp.accentColor : colors.text,
+                }}
+              >
+                {exp.title}
+              </h2>
+
+              {/* Description */}
+              <p
+                className="text-sm lg:text-base leading-relaxed flex-1 min-h-0"
+                style={{ color: colors.textMuted }}
+              >
+                {exp.description}
+              </p>
             </div>
 
-            {/* Title */}
-            <h2
-              className="text-xl lg:text-2xl font-bold mb-3 transition-colors duration-300"
-              style={{
-                color: hoveredTile === exp.id ? exp.accentColor : colors.text,
-              }}
-            >
-              {exp.title}
-            </h2>
-
-            {/* Description */}
-            <p
-              className="text-sm lg:text-base leading-relaxed mb-6"
-              style={{ color: colors.textMuted }}
-            >
-              {exp.description}
-            </p>
-
-            {/* Arrow indicator */}
+            {/* Explore — aligned at bottom of tile (same baseline across all tiles) */}
             <div
-              className="flex items-center gap-2 text-sm font-medium transition-all duration-300"
+              className="flex items-center gap-2 text-sm font-medium transition-all duration-300 mt-6 shrink-0"
               style={{
                 color: exp.accentColor,
                 opacity: hoveredTile === exp.id ? 1 : 0.6,

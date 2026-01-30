@@ -4,12 +4,12 @@ import { colors } from "@/config/theme";
 
 export function ArchitectureDiagram() {
   return (
-    <div className="relative w-full flex justify-center mt-8">
-      <div className="relative w-full max-w-5xl flex items-center">
+    <div className="relative w-full flex justify-center mt-2">
+      <div className="relative w-full max-w-6xl flex items-center">
         <svg
           viewBox="0 0 650 560"
-          className="w-full max-w-3xl h-auto"
-          style={{ maxHeight: "55vh", minHeight: "450px" }}
+          className="w-full max-w-4xl h-auto"
+          style={{ maxHeight: "55vh", minHeight: "400px" }}
         >
           <defs>
             <filter id="glow">
@@ -30,12 +30,11 @@ export function ArchitectureDiagram() {
             stroke={colors.primary}
             strokeWidth="2"
             strokeDasharray="10 6"
-            opacity="0.6"
-            style={{ opacity: 0 }}
+            style={{ opacity: 0.6 }}
           />
 
           {/* ThingsX Console - Monitor with bar chart and gauges */}
-          <g className="diagram-console" style={{ opacity: 0 }}>
+          <g className="diagram-console">
             <rect
               x="60"
               y="220"
@@ -73,7 +72,7 @@ export function ArchitectureDiagram() {
             { x: 240, y: 260 },
             { x: 170, y: 400 },
           ].map((gw, i) => (
-            <g key={i} className="diagram-gateway" style={{ opacity: 0 }}>
+            <g key={i} className="diagram-gateway">
               <rect
                 x={gw.x - 22}
                 y={gw.y - 22}
@@ -117,7 +116,7 @@ export function ArchitectureDiagram() {
               { x: 170, y: 400 },
             ][sensor.gatewayIdx];
             return (
-              <g key={i} className="diagram-sensor" style={{ opacity: 0 }}>
+              <g key={i} className="diagram-sensor">
                 <line
                   x1={gateway.x + 22}
                   y1={gateway.y}
@@ -159,7 +158,7 @@ export function ArchitectureDiagram() {
             { x: 480, y: 420, type: "wifi" },
             { x: 380, y: 500, type: "bluetooth" },
           ].map((peripheral, i) => (
-            <g key={i} className="diagram-peripheral" style={{ opacity: 0 }}>
+            <g key={i} className="diagram-peripheral">
               {peripheral.type === "temperature" && (
                 <>
                   <circle cx={peripheral.x} cy={peripheral.y} r="14" fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="1.5" />
@@ -228,7 +227,7 @@ export function ArchitectureDiagram() {
 
         {/* Component Definitions - Right side of diagram */}
         <div className="absolute right-0 top-0 h-full hidden lg:flex flex-col justify-between py-8" style={{ width: "280px" }}>
-          <div className="diagram-label" style={{ opacity: 0 }}>
+          <div className="diagram-label">
             <h4 className="text-sm font-semibold mb-1" style={{ color: colors.primary }}>
               AI Satellites
             </h4>
@@ -240,7 +239,7 @@ export function ArchitectureDiagram() {
             </p>
           </div>
 
-          <div className="diagram-label" style={{ opacity: 0 }}>
+          <div className="diagram-label">
             <h4 className="text-sm font-semibold mb-1" style={{ color: colors.primary }}>
               Endpoints/Sensors
             </h4>
@@ -255,7 +254,7 @@ export function ArchitectureDiagram() {
             </p>
           </div>
 
-          <div className="diagram-label" style={{ opacity: 0 }}>
+          <div className="diagram-label">
             <h4 className="text-sm font-semibold mb-1" style={{ color: colors.primary }}>
               Gateway
             </h4>
@@ -267,7 +266,7 @@ export function ArchitectureDiagram() {
             </p>
           </div>
 
-          <div className="diagram-label" style={{ opacity: 0 }}>
+          <div className="diagram-label">
             <h4 className="text-sm font-semibold mb-1" style={{ color: colors.primary }}>
               ThingsX Console:
             </h4>

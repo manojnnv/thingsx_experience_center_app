@@ -10,6 +10,7 @@
 import { api } from "@/app/utils/api";
 import { getOrgId, getSiteId } from "@/config/site";
 import { toast } from "sonner";
+import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 // ===========================================
 // Types
@@ -48,7 +49,9 @@ export interface BulkDeviceData {
 /**
  * Get device categories for bulk update
  */
-async function getDeviceCategories(siteId?: string): Promise<{ data: DeviceCategory[] | null; error: string | null }> {
+async function getDeviceCategories(
+  siteId?: string
+): Promise<ServiceResult<DeviceCategory[]>> {
   try {
     const resp = await api.post("/v1/device/categories", {
       site_id: siteId || getSiteId(),
@@ -60,20 +63,20 @@ async function getDeviceCategories(siteId?: string): Promise<{ data: DeviceCateg
         id,
         name: name as string,
       }));
-      return { data: categoryList, error: null };
+      return ok(categoryList);
     }
     
-    return { data: [], error: null };
+    return ok([]);
   } catch (error) {
     console.error("Error fetching device categories:", error);
-    return { data: null, error: "Failed to fetch device categories" };
+    return fail(getErrorMessage(error, "Failed to fetch device categories"));
   }
 }
 
 /**
  * Get organization sites (used by thingsx_ui_v2 bulk update flow)
  */
-async function getOrgSites(orgId?: string): Promise<{ data: OrgSite[] | null; error: string | null }> {
+async function getOrgSites(orgId?: string): Promise<ServiceResult<OrgSite[]>> {
   try {
     const resp = await api.post("/v1/org/sites", {
       org_id: orgId || getOrgId(),
@@ -85,20 +88,22 @@ async function getOrgSites(orgId?: string): Promise<{ data: OrgSite[] | null; er
         id: String(site.id ?? site.site_id ?? ""),
         name: String(site.name ?? site.site_name ?? ""),
       }));
-      return { data: siteList, error: null };
+      return ok(siteList);
     }
 
-    return { data: [], error: null };
+    return ok([]);
   } catch (error) {
     console.error("Error fetching org sites:", error);
-    return { data: null, error: "Failed to fetch sites" };
+    return fail(getErrorMessage(error, "Failed to fetch sites"));
   }
 }
 
 /**
  * Get device config options for a category
  */
-async function getDeviceConfigOptions(deviceCode: string): Promise<{ data: DeviceConfigOption[] | null; error: string | null }> {
+async function getDeviceConfigOptions(
+  deviceCode: string
+): Promise<ServiceResult<DeviceConfigOption[]>> {
   try {
     const resp = await api.post("/v1/device/config/options", {
       device_code: deviceCode,
@@ -110,20 +115,22 @@ async function getDeviceConfigOptions(deviceCode: string): Promise<{ data: Devic
         id,
         name: name as string,
       }));
-      return { data: optionList, error: null };
+      return ok(optionList);
     }
     
-    return { data: [], error: null };
+    return ok([]);
   } catch (error) {
     console.error("Error fetching device config options:", error);
-    return { data: null, error: "Failed to fetch config options" };
+    return fail(getErrorMessage(error, "Failed to fetch config options"));
   }
 }
 
 /**
  * Get ESL templates for a device code (used by bulk update flow)
  */
-async function getEslTemplates(deviceCode: string): Promise<{ data: EslTemplate[] | null; error: string | null }> {
+async function getEslTemplates(
+  deviceCode: string
+): Promise<ServiceResult<EslTemplate[]>> {
   try {
     const resp = await api.post("/v1/esl/device/templates", {
       device_code: deviceCode,
@@ -135,13 +142,13 @@ async function getEslTemplates(deviceCode: string): Promise<{ data: EslTemplate[
         id: String(template.id ?? template.template_id ?? ""),
         name: String(template.name ?? template.template_name ?? ""),
       }));
-      return { data: templateList, error: null };
+      return ok(templateList);
     }
 
-    return { data: [], error: null };
+    return ok([]);
   } catch (error) {
     console.error("Error fetching ESL templates:", error);
-    return { data: null, error: "Failed to fetch ESL templates" };
+    return fail(getErrorMessage(error, "Failed to fetch ESL templates"));
   }
 }
 
@@ -153,7 +160,7 @@ async function retrieveDevicesForBulk(
   deviceConfig: string,
   templateId?: string,
   siteId?: string
-): Promise<{ data: BulkDeviceData[] | null; columns: string[] | null; error: string | null }> {
+): Promise<ServiceResult<{ rows: BulkDeviceData[]; columns: string[] }>> {
   try {
     const payload: Record<string, string> = {
       device_code: deviceCategory,
@@ -219,10 +226,10 @@ async function retrieveDevicesForBulk(
         ? Object.keys(flattenedData[0]).filter((key) => !key.startsWith("__"))
         : [];
     
-    return { data: flattenedData, columns, error: null };
+    return ok({ rows: flattenedData, columns });
   } catch (error) {
     console.error("Error retrieving devices for bulk:", error);
-    return { data: null, columns: null, error: "Failed to retrieve devices" };
+    return fail(getErrorMessage(error, "Failed to retrieve devices"));
   }
 }
 
@@ -232,10 +239,10 @@ async function retrieveDevicesForBulk(
 async function pushBulkUpdate(
   deviceConfig: string,
   data: Array<Record<string, any>>
-): Promise<{ success: boolean; error: string | null }> {
+): Promise<ServiceResult<{ status?: string; message?: string }>> {
   if (!deviceConfig) {
     toast.error("Please select device category & device config");
-    return { success: false, error: "Missing device config" };
+    return fail("Missing device config");
   }
   
   try {
@@ -247,10 +254,10 @@ async function pushBulkUpdate(
       toast.message(resp.data.message);
     }
     
-    return { success: resp?.data?.status === "success", error: null };
+    return ok(resp?.data);
   } catch (error) {
     console.error("Error pushing bulk update:", error);
-    return { success: false, error: "Failed to push bulk update" };
+    return fail(getErrorMessage(error, "Failed to push bulk update"));
   }
 }
 
@@ -260,7 +267,7 @@ async function pushBulkUpdate(
 async function updateDeviceConfig(
   tin: string,
   data: Record<string, any>
-): Promise<{ success: boolean; error: string | null }> {
+): Promise<ServiceResult<{ status?: string; message?: string }>> {
   try {
     const resp = await api.post("/v1/device/config/update", {
       tin: tin,
@@ -269,33 +276,35 @@ async function updateDeviceConfig(
     
     if (resp?.data?.status === "error") {
       toast.error(resp?.data?.message || "Update failed");
-      return { success: false, error: resp?.data?.message };
+      return fail(resp?.data?.message || "Update failed");
     }
     
     if (resp?.data?.message) {
       toast.success(resp.data.message);
     }
     
-    return { success: true, error: null };
+    return ok(resp?.data);
   } catch (error) {
     console.error("Error updating device config:", error);
-    return { success: false, error: "Failed to update device" };
+    return fail(getErrorMessage(error, "Failed to update device"));
   }
 }
 
 /**
  * Get current device config
  */
-async function getDeviceConfig(tin: string): Promise<{ data: Record<string, any> | null; error: string | null }> {
+async function getDeviceConfig(
+  tin: string
+): Promise<ServiceResult<Record<string, any> | null>> {
   try {
     const resp = await api.post("/v1/device/config/get", {
       tin: tin,
     });
     
-    return { data: resp?.data?.data?.schema || resp?.data?.data, error: null };
+    return ok(resp?.data?.data?.schema || resp?.data?.data || null);
   } catch (error) {
     console.error("Error getting device config:", error);
-    return { data: null, error: "Failed to get device config" };
+    return fail(getErrorMessage(error, "Failed to get device config"));
   }
 }
 

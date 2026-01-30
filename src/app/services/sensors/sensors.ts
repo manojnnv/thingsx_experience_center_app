@@ -8,6 +8,7 @@
 import { api } from "@/app/utils/api";
 import { sensorsDeviceTins, getSensorTins, DeviceConfig, categoryConfig } from "@/config/devices";
 import { toast } from "sonner";
+import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 // Types
 export interface DeviceFromAPI {
@@ -20,6 +21,12 @@ export interface DeviceFromAPI {
   zone_name?: string;
   ref_tin?: string;
   last_seen?: string;
+}
+
+export interface DeviceByCode {
+  tin: string;
+  device_name: string;
+  device_type: string;
 }
 
 export interface Device {
@@ -49,6 +56,18 @@ export interface SensorMetric {
   unit?: string;
 }
 
+export interface MetricRecord {
+  Tin: string;
+  "Device Code"?: string;
+  "Device Type"?: string;
+  "Device Name"?: string;
+  "Device Icon"?: string;
+  Location?: string;
+  Metric?: string;
+  Value?: string;
+  Time?: string;
+}
+
 export interface TreeViewNode {
   id: string;
   name: string;
@@ -59,7 +78,7 @@ export interface TreeViewNode {
 /**
  * Fetch all devices from API and filter by configured TINs
  */
-export const fetchConfiguredDevices = async (): Promise<Device[]> => {
+export const fetchConfiguredDevices = async (): Promise<ServiceResult<Device[]>> => {
   try {
     const resp = await api.post("/v1/device/retrieval", {
       org_id: localStorage.getItem("org_id"),
@@ -74,57 +93,125 @@ export const fetchConfiguredDevices = async (): Promise<Device[]> => {
     );
 
     // Map to our Device type with config overrides
-    return filteredDevices.map((device) => {
+    const mappedDevices: Device[] = filteredDevices.map((device) => {
       const config = sensorsDeviceTins.find((c) => c.tin === device.tin);
       const category = config?.category || "sensor";
       const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+      const status: Device["status"] = device.status === "online" ? "online" : "offline";
 
       return {
         tin: device.tin,
         name: config?.displayName || device.device_name,
         type: categoryInfo.label,
         category,
-        status: device.status === "online" ? "online" : "offline",
+        status,
         unit: categoryInfo.unit,
         lastSeen: device.last_seen,
       };
     });
+    return ok(mappedDevices);
   } catch (error) {
     console.error("Error fetching devices:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch devices"));
+  }
+};
+
+const normalizeCategoryKey = (deviceType?: string): string => {
+  if (!deviceType) return "sensor";
+  return deviceType
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+};
+
+const parseMetricValue = (raw?: string): { value: number | null; unit: string } => {
+  if (!raw) return { value: null, unit: "" };
+  const trimmed = String(raw).trim();
+  const match = trimmed.match(/^(-?\d+(?:\.\d+)?)(?:\s*(.*))?$/);
+  if (!match) return { value: null, unit: "" };
+  const value = Number(match[1]);
+  return { value: Number.isFinite(value) ? value : null, unit: match[2]?.trim() || "" };
+};
+
+export const fetchDevicesByDeviceCode = async (
+  deviceCode: string
+): Promise<ServiceResult<DeviceByCode[]>> => {
+  try {
+    const resp = await api.post("/v1/site/devices-by-device-code", {
+      site_id: localStorage.getItem("site_id"),
+      device_code: deviceCode,
+    });
+    return ok(resp?.data?.data || []);
+  } catch (error) {
+    console.error("Error fetching devices by device code:", error);
+    return fail(getErrorMessage(error, "Failed to fetch devices by device code"));
+  }
+};
+
+export const fetchDevicesByDeviceCodes = async (
+  deviceCodes: string[]
+): Promise<ServiceResult<DeviceByCode[]>> => {
+  const uniqueCodes = Array.from(new Set(deviceCodes.filter(Boolean)));
+  const results = await Promise.all(
+    uniqueCodes.map((code) => fetchDevicesByDeviceCode(code))
+  );
+  const errors = results.filter((result) => result.error);
+  if (errors.length > 0) {
+    return fail("Failed to fetch devices by device codes");
+  }
+  return ok(results.flatMap((result) => result.data || []));
+};
+
+export const fetchDeviceMetrics = async (
+  tins: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<ServiceResult<MetricRecord[]>> => {
+  try {
+    const resp = await api.post("/v1/device/metrics", {
+      site_id: localStorage.getItem("site_id"),
+      tins,
+      start_date: startDate,
+      end_date: endDate,
+    });
+    return ok(resp?.data?.data || []);
+  } catch (error) {
+    console.error("Error fetching device metrics:", error);
+    return fail(getErrorMessage(error, "Failed to fetch device metrics"));
   }
 };
 
 /**
  * Get device details by TIN
  */
-export const getDeviceDetails = async (tin: string): Promise<DeviceDetails | null> => {
+export const getDeviceDetails = async (
+  tin: string
+): Promise<ServiceResult<DeviceDetails | null>> => {
   try {
     const resp = await api.post("/v1/device/details", {
       tin,
     });
-    toast.message(resp?.data?.message);
-    return resp?.data?.data;
+    return ok(resp?.data?.data ?? null);
   } catch (error) {
     console.error("Error fetching device details:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch device details"));
   }
 };
 
 /**
  * Get device tree view (for star topology)
  */
-export const getDeviceTreeView = async (): Promise<TreeViewNode[]> => {
+export const getDeviceTreeView = async (): Promise<ServiceResult<TreeViewNode[]>> => {
   try {
     const resp = await api.post("/v1/device/tree-view", {
       org_id: localStorage.getItem("org_id"),
       site_id: localStorage.getItem("site_id"),
     });
-    toast.message(resp?.data?.message);
-    return resp?.data?.data || [];
+    return ok(resp?.data?.data || []);
   } catch (error) {
     console.error("Error fetching tree view:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch tree view"));
   }
 };
 
@@ -135,22 +222,34 @@ export const fetchSensorMetrics = async (
   tins?: string[],
   startDate?: string,
   endDate?: string
-): Promise<Record<string, SensorMetric[]>> => {
+): Promise<ServiceResult<Record<string, SensorMetric[]>>> => {
   try {
     // Use provided TINs or fall back to configured TINs
     const targetTins = tins || getSensorTins();
+    const metricsResult = await fetchDeviceMetrics(targetTins, startDate, endDate);
+    if (metricsResult.error) {
+      return fail(metricsResult.error);
+    }
+    const metrics = metricsResult.data || [];
+    const grouped: Record<string, SensorMetric[]> = {};
 
-    const resp = await api.post("/v1/device/metrics", {
-      site_id: localStorage.getItem("site_id"),
-      tins: targetTins,
-      start_date: startDate,
-      end_date: endDate,
+    metrics.forEach((entry) => {
+      const tin = entry.Tin;
+      if (!tin) return;
+      const parsed = parseMetricValue(entry.Value);
+      if (parsed.value === null) return;
+      const item: SensorMetric = {
+        timestamp: entry.Time || new Date().toISOString(),
+        value: parsed.value,
+        unit: parsed.unit,
+      };
+      grouped[tin] = grouped[tin] ? [...grouped[tin], item] : [item];
     });
-    toast.message(resp?.data?.message);
-    return resp?.data?.data || {};
+
+    return ok(grouped);
   } catch (error) {
     console.error("Error fetching sensor metrics:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch sensor metrics"));
   }
 };
 
@@ -159,16 +258,16 @@ export const fetchSensorMetrics = async (
  */
 export const getDeviceConfig = async (
   tin: string
-): Promise<Record<string, unknown> | null> => {
+): Promise<ServiceResult<Record<string, unknown> | null>> => {
   try {
     const resp = await api.post("v1/device/config/get", {
       tin,
     });
     toast.message(resp?.data?.message);
-    return resp?.data?.data?.schema;
+    return ok(resp?.data?.data?.schema ?? null);
   } catch (error) {
     console.error("Error fetching device config:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to fetch device config"));
   }
 };
 
@@ -178,7 +277,7 @@ export const getDeviceConfig = async (
 export const updateDeviceConfig = async (
   tin: string,
   data: Record<string, unknown>
-): Promise<{ status: string; message: string }> => {
+): Promise<ServiceResult<{ status?: string; message?: string }>> => {
   try {
     const resp = await api.post("v1/device/config/update", {
       tin,
@@ -192,27 +291,32 @@ export const updateDeviceConfig = async (
       toast.message(resp?.data?.message);
     }
 
-    return resp?.data;
+    return ok(resp?.data);
   } catch (error) {
     console.error("Error updating device config:", error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return fail(getErrorMessage(error, "Failed to update device config"));
   }
 };
 
 /**
  * Get latest reading for a specific device
  */
-export const getLatestReading = async (tin: string): Promise<SensorMetric | null> => {
+export const getLatestReading = async (
+  tin: string
+): Promise<ServiceResult<SensorMetric | null>> => {
   try {
-    const metrics = await fetchSensorMetrics([tin]);
-    const deviceMetrics = metrics[tin];
-    if (deviceMetrics && deviceMetrics.length > 0) {
-      return deviceMetrics[deviceMetrics.length - 1];
+    const metricsResult = await fetchSensorMetrics([tin]);
+    if (metricsResult.error) {
+      return fail(metricsResult.error);
     }
-    return null;
+    const deviceMetrics = metricsResult.data?.[tin];
+    if (deviceMetrics && deviceMetrics.length > 0) {
+      return ok(deviceMetrics[deviceMetrics.length - 1]);
+    }
+    return ok(null);
   } catch (error) {
     console.error("Error fetching latest reading:", error);
-    return null;
+    return fail(getErrorMessage(error, "Failed to fetch latest reading"));
   }
 };
 
@@ -233,60 +337,85 @@ export interface SensorLiveReading {
  * Returns only sensors that have data
  * Returns { readings, error } to allow caller to handle errors gracefully
  */
-export const pollSensorData = async (): Promise<{ readings: SensorLiveReading[]; error?: string }> => {
+export const pollSensorData = async (
+  maxAgeMs?: number
+): Promise<ServiceResult<SensorLiveReading[]>> => {
   try {
     const configuredTins = getSensorTins();
     
     if (configuredTins.length === 0) {
-      return { readings: [] };
+      return ok([]);
     }
     
     // Check if we have auth tokens before making the request
     const accessToken = localStorage.getItem("access_token");
     if (!accessToken) {
-      return { readings: [], error: "NOT_AUTHENTICATED" };
+      return fail("NOT_AUTHENTICATED");
     }
     
-    const resp = await api.post("/v1/device/metrics", {
-      site_id: localStorage.getItem("site_id"),
-      tins: configuredTins,
-    });
-    
-    const metricsData = resp?.data?.data || {};
+    const end = new Date();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const metricsResult = await fetchDeviceMetrics(
+      configuredTins,
+      start.toISOString(),
+      end.toISOString()
+    );
+    if (metricsResult.error) {
+      return fail(metricsResult.error);
+    }
+    const metrics = metricsResult.data || [];
     const readings: SensorLiveReading[] = [];
-    
-    // Process each TIN's data
-    Object.entries(metricsData).forEach(([tin, metrics]) => {
-      const metricsArray = metrics as SensorMetric[];
-      if (metricsArray && metricsArray.length > 0) {
-        const latestMetric = metricsArray[metricsArray.length - 1];
-        const config = sensorsDeviceTins.find((c) => c.tin === tin);
-        const category = config?.category || "sensor";
-        const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
-        
-        readings.push({
-          tin,
-          value: latestMetric.value,
-          unit: latestMetric.unit || categoryInfo.unit,
-          timestamp: new Date(latestMetric.timestamp),
-          category,
-          displayName: config?.displayName || tin,
-        });
+
+    const latestByTin = new Map<string, MetricRecord>();
+    metrics.forEach((entry) => {
+      const tin = entry.Tin;
+      if (!tin) return;
+      const existing = latestByTin.get(tin);
+      if (!existing) {
+        latestByTin.set(tin, entry);
+        return;
+      }
+      const existingTime = new Date(existing.Time || 0).getTime();
+      const nextTime = new Date(entry.Time || 0).getTime();
+      if (nextTime >= existingTime) {
+        latestByTin.set(tin, entry);
       }
     });
+
+    const now = Date.now();
+    latestByTin.forEach((entry, tin) => {
+      const parsed = parseMetricValue(entry.Value);
+      if (parsed.value === null) return;
+      const timestamp = new Date(entry.Time || new Date().toISOString());
+      if (maxAgeMs && now - timestamp.getTime() > maxAgeMs) {
+        return;
+      }
+      const config = sensorsDeviceTins.find((c) => c.tin === tin);
+      const category = config?.category || normalizeCategoryKey(entry["Device Type"]) || "sensor";
+      const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+      readings.push({
+        tin,
+        value: parsed.value,
+        unit: parsed.unit || categoryInfo.unit,
+        timestamp,
+        category,
+        displayName: config?.displayName || entry["Device Name"] || tin,
+      });
+    });
     
-    return { readings };
+    return ok(readings);
   } catch (error: unknown) {
     // Handle specific error types
     const axiosError = error as { response?: { status?: number } };
     if (axiosError?.response?.status === 401) {
-      return { readings: [], error: "NOT_AUTHENTICATED" };
+      return fail("NOT_AUTHENTICATED");
     }
     if (axiosError?.response?.status === 403) {
-      return { readings: [], error: "FORBIDDEN" };
+      return fail("FORBIDDEN");
     }
     // For other errors, return generic error
-    return { readings: [], error: "API_ERROR" };
+    return fail("API_ERROR");
   }
 };
 
@@ -294,7 +423,7 @@ export const pollSensorData = async (): Promise<{ readings: SensorLiveReading[];
  * Poll dashboard sensor metrics (alternative endpoint)
  * This gets all sensor readings for the site
  */
-export const pollDashboardSensorMetrics = async (): Promise<SensorLiveReading[]> => {
+export const pollDashboardSensorMetrics = async (): Promise<ServiceResult<SensorLiveReading[]>> => {
   try {
     const resp = await api.post("/v1/dashboard/sensor-readings/metrics", {
       org_id: localStorage.getItem("org_id"),
@@ -323,9 +452,9 @@ export const pollDashboardSensorMetrics = async (): Promise<SensorLiveReading[]>
       }
     });
     
-    return readings;
+    return ok(readings);
   } catch (error) {
     console.error("Error polling dashboard metrics:", error);
-    return [];
+    return fail(getErrorMessage(error, "Failed to poll dashboard metrics"));
   }
 };

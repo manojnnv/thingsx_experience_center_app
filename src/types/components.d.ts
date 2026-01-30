@@ -2,7 +2,7 @@
  * Component Type Definitions
  */
 
-import { ReactNode } from 'react';
+import { ButtonHTMLAttributes, ReactNode } from 'react';
 
 export interface BaseComponentProps {
   className?: string;
@@ -27,4 +27,20 @@ export interface TableProps<T> extends BaseComponentProps {
   columns: TableColumn<T>[];
   loading?: boolean;
   onRowClick?: (row: T) => void;
+}
+
+type ButtonVariant =
+  | 'outline'
+  | 'link'
+  | 'default'
+  | 'destructive'
+  | 'secondary'
+  | 'ghost';
+
+export interface AppIconButtonProps
+  extends ButtonHTMLAttributes<HTMLButtonElement> {
+  label?: string;
+  icon: React.ElementType;
+  variant?: ButtonVariant;
+  classname?: string;
 }

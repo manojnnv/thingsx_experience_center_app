@@ -3,10 +3,10 @@
 export const theme = {
   colors: {
     // Primary accent
-    primary: "#00d4aa", // Teal/green
-    primaryHover: "#00e6b8",
-    primaryMuted: "rgba(0, 212, 170, 0.3)",
-    primaryFaint: "rgba(0, 212, 170, 0.05)",
+    primary: "#00E676", // Green
+    primaryHover: "#00ee7e",
+    primaryMuted: "rgba(0, 230, 118, 0.3)",
+    primaryFaint: "rgba(0, 230, 118, 0.05)",
 
     // Background colors
     background: "#060608",
@@ -32,14 +32,15 @@ export const theme = {
 
     // Experience-specific accent colors
     sensorAccent: " #ffd700", // Yellow for Sensors & Endnodes
-    retailAccent: " #00d4aa", // Teal for Retail Experience
-    retailAccentHover: " #00e6b8",
-    retailAccentMuted: "rgba(0, 212, 170, 0.3)",
-    retailAccentFaint: "rgba(0, 212, 170, 0.05)",
+    retailAccent: " #00E676", // Green for Retail Experience
+    retailAccentHover: " #00ee7e",
+    retailAccentMuted: "rgba(0, 230, 118, 0.3)",
+    retailAccentFaint: "rgba(0, 230, 118, 0.05)",
     warehouseAccent: " #ff9f43", // Orange for Warehouse Experience
+    innovationLabAccent: " #00E676", // Green for Innovation Lab
 
     // Star/constellation colors
-    starBright: " #00d4aa",
+    starBright: " #00E676",
     starDim: " #ffffff",
 
     // Shadow colors

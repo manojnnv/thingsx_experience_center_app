@@ -1,82 +1,105 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { colors } from "@/config/theme";
-import SensorsVideoIntro from "@/app/component/app-sensors/SensorsVideoIntro";
+import VideoIntro from "@/app/component/app-experience/VideoIntro";
+import { WarehouseHeader, WarehouseIndoorPositioningTab } from "@/app/component/app-warehouse";
+import { Toaster } from "sonner";
+import { TooltipProvider } from "@/app/components/ui/tooltip";
+
+// Tab configuration
+const TABS = {
+  indoorPositioning: "Indoor Positioning",
+  railCam: "Rail Cam",
+} as const;
+
+type ActiveTab = (typeof TABS)[keyof typeof TABS];
 
 export default function WarehouseExperiencePage() {
   const [showVideo, setShowVideo] = useState(true);
+  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS.indoorPositioning);
+
+  const tabs = Object.values(TABS);
+
+  const accent = colors.warehouseAccent;
+  const gridColor = `${(accent || "").trim()}12`;
 
   return (
-    <div
-      className="min-h-screen text-white relative"
-      style={{ backgroundColor: colors.background }}
-    >
-      <SensorsVideoIntro
-        show={showVideo}
-        onSkip={() => setShowVideo(false)}
-        title="Warehouse Experience"
-        subtitle="Experience inventory tracking, asset management, and logistics optimization."
-        buttonLabel="Enter"
-        accentColor={colors.orange}
-      />
+    <TooltipProvider>
+      <div
+        className="min-h-screen text-white relative"
+        style={{
+          backgroundColor: colors.background,
+          backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
+          backgroundSize: "32px 32px",
+        }}
+      >
+        <Toaster position="top-right" richColors />
 
-      {/* Header */}
-      <header className="relative z-10 pt-8 pb-4 px-8">
-        <Link
-          href="/experiences"
-          className="inline-flex items-center gap-2 text-sm transition-colors duration-300 group"
-          style={{ color: colors.textMuted }}
+        <VideoIntro
+          show={showVideo}
+          onSkip={() => setShowVideo(false)}
+          title="Warehouse Experience"
+          subtitle="Experience indoor positioning, rail cam monitoring, and logistics optimization."
+          buttonLabel="Enter"
+          accentColor={colors.warehouseAccent}
+        />
+
+        {/* Main Content */}
+        <div
+          className={
+            showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"
+          }
         >
-          <svg
-            className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10 19l-7-7m0 0l7-7m-7 7h18"
-            />
-          </svg>
-          <span className="group-hover:text-white">Back to Experience Center</span>
-        </Link>
-      </header>
+          <WarehouseHeader
+            tabs={tabs}
+            defaultTab={TABS.indoorPositioning}
+            onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+            accentColor={colors.warehouseAccent}
+          />
 
-      <main className="flex items-center justify-center min-h-[calc(100vh-120px)] px-8">
-        <div className="text-center">
-          <div
-            className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: `${colors.orange}20` }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={colors.orange}
-              strokeWidth={1.5}
-              className="w-8 h-8"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205l3 1m1.5.5l-1.5-.5M6.75 7.364V3h-3v18m3-13.636l10.5-3.819"
-              />
-            </svg>
-          </div>
-          <h1
-            className="text-4xl font-bold mb-4"
-            style={{ color: colors.orange }}
-          >
-            Warehouse Experience
-          </h1>
-          <p style={{ color: colors.textMuted }}>
-            Experience coming soon...
-          </p>
+          {/* Content Area */}
+          <main className="px-8 py-6">
+            {/* Indoor Positioning Tab */}
+            {activeTab === TABS.indoorPositioning && (
+              <WarehouseIndoorPositioningTab accentColor={colors.warehouseAccent} />
+            )}
+
+            {/* Rail Cam Tab - Placeholder */}
+            {activeTab === TABS.railCam && (
+              <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                  <div
+                    className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: `${colors.warehouseAccent}20` }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={colors.warehouseAccent}
+                      strokeWidth={1.5}
+                      className="w-8 h-8"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
+                      />
+                    </svg>
+                  </div>
+                  <h2
+                    className="text-2xl font-bold mb-2"
+                    style={{ color: colors.warehouseAccent }}
+                  >
+                    Rail Cam
+                  </h2>
+                  <p style={{ color: colors.textMuted }}>Coming soon...</p>
+                </div>
+              </div>
+            )}
+          </main>
         </div>
-      </main>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

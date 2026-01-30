@@ -51,6 +51,12 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0008000002", displayName: "Relay- 1 ch", category: "relay" },
   { tin: "SN0020000001", displayName: "Relay- 2 ch", category: "relay" },
   { tin: "SN0009000001", displayName: "Relay- 4 ch", category: "relay" },
+  { tin: "SN0005000001", displayName: "Rack-1 LED", category: "led" },
+  { tin: "SN0005000002", displayName: "Rack-2 LED", category: "led" },
+  { tin: "SN0005000003", displayName: "Rack-3 LED", category: "led" },
+  { tin: "SN0003000003", displayName: "Rack-1 Load Cell", category: "load_cell" },
+  { tin: "SN0003000004", displayName: "Rack-2 Load Cell", category: "load_cell" },
+  { tin: "SN0003000001", displayName: "Rack-3 Load Cell", category: "load_cell" },
 ];
 
 // ===========================================
@@ -357,6 +363,8 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   current: { label: "Current", unit: "A", icon: "zap" },
   magnetometer: { label: "Magnetometer", unit: "µT", icon: "compass" },
   relay: { label: "Relay", unit: "state", icon: "toggle-right" },
+  led: { label: "LED", unit: "", icon: "sun" },
+  load_cell: { label: "Load Cell", unit: "kg", icon: "scale" },
 };
 
 /**
