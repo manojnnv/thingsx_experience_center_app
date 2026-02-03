@@ -6,7 +6,7 @@
  */
 
 import { api } from "@/app/utils/api";
-import { sensorsDeviceTins, getSensorTins, DeviceConfig, categoryConfig } from "@/config/devices";
+import { sensorsDeviceTins, getSensorTins, DeviceConfig, categoryConfig, categoryToLogo, LOGOS_BASE } from "@/config/devices";
 import { toast } from "sonner";
 import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
@@ -16,6 +16,7 @@ export interface DeviceFromAPI {
   device_name: string;
   device_type: string;
   device_code?: string;
+  device_icon?: string;
   status?: string;
   zone_id?: string;
   zone_name?: string;
@@ -27,6 +28,7 @@ export interface DeviceByCode {
   tin: string;
   device_name: string;
   device_type: string;
+  device_icon?: string;
 }
 
 export interface Device {
@@ -54,6 +56,8 @@ export interface SensorMetric {
   timestamp: string;
   value: number;
   unit?: string;
+  /** When metric is a color (e.g. Addressable RGB), hex string for display */
+  rawValue?: string;
 }
 
 export interface MetricRecord {
@@ -98,6 +102,8 @@ export const fetchConfiguredDevices = async (): Promise<ServiceResult<Device[]>>
       const category = config?.category || "sensor";
       const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
       const status: Device["status"] = device.status === "online" ? "online" : "offline";
+      const logoFile = categoryToLogo[category];
+      const iconPath = logoFile ? `${LOGOS_BASE}/${encodeURIComponent(logoFile)}` : undefined;
 
       return {
         tin: device.tin,
@@ -107,6 +113,7 @@ export const fetchConfiguredDevices = async (): Promise<ServiceResult<Device[]>>
         status,
         unit: categoryInfo.unit,
         lastSeen: device.last_seen,
+        icon: device.device_icon ?? iconPath,
       };
     });
     return ok(mappedDevices);
@@ -133,6 +140,11 @@ const parseMetricValue = (raw?: string): { value: number | null; unit: string } 
   const value = Number(match[1]);
   return { value: Number.isFinite(value) ? value : null, unit: match[2]?.trim() || "" };
 };
+
+const isHexColor = (raw?: string): boolean => /^#([0-9A-Fa-f]{3}){1,2}$/.test(String(raw || "").trim());
+
+const isColorMetric = (metric?: string, value?: string): boolean =>
+  (metric && /color|colour/i.test(metric)) || isHexColor(value);
 
 export const fetchDevicesByDeviceCode = async (
   deviceCode: string
@@ -215,16 +227,22 @@ export const getDeviceTreeView = async (): Promise<ServiceResult<TreeViewNode[]>
   }
 };
 
+export type SensorMetricsResult = {
+  metrics: Record<string, SensorMetric[]>;
+  /** Device icon URL per TIN when returned by POST /v1/device/metrics ("Device Icon") */
+  icons: Record<string, string>;
+};
+
 /**
- * Fetch sensor metrics/readings for configured devices
+ * Fetch sensor metrics/readings for configured devices.
+ * Also extracts "Device Icon" from the metrics API when present and returns it per TIN.
  */
 export const fetchSensorMetrics = async (
   tins?: string[],
   startDate?: string,
   endDate?: string
-): Promise<ServiceResult<Record<string, SensorMetric[]>>> => {
+): Promise<ServiceResult<SensorMetricsResult>> => {
   try {
-    // Use provided TINs or fall back to configured TINs
     const targetTins = tins || getSensorTins();
     const metricsResult = await fetchDeviceMetrics(targetTins, startDate, endDate);
     if (metricsResult.error) {
@@ -232,21 +250,27 @@ export const fetchSensorMetrics = async (
     }
     const metrics = metricsResult.data || [];
     const grouped: Record<string, SensorMetric[]> = {};
+    const icons: Record<string, string> = {};
 
     metrics.forEach((entry) => {
       const tin = entry.Tin;
       if (!tin) return;
+      if (entry["Device Icon"] && !icons[tin]) {
+        icons[tin] = entry["Device Icon"];
+      }
       const parsed = parseMetricValue(entry.Value);
-      if (parsed.value === null) return;
+      const valueIsColor = isColorMetric(entry.Metric, entry.Value);
+      if (parsed.value === null && !valueIsColor) return;
       const item: SensorMetric = {
         timestamp: entry.Time || new Date().toISOString(),
-        value: parsed.value,
+        value: parsed.value ?? 0,
         unit: parsed.unit,
+        ...(valueIsColor && entry.Value?.trim() && { rawValue: entry.Value.trim() }),
       };
       grouped[tin] = grouped[tin] ? [...grouped[tin], item] : [item];
     });
 
-    return ok(grouped);
+    return ok({ metrics: grouped, icons });
   } catch (error) {
     console.error("Error fetching sensor metrics:", error);
     return fail(getErrorMessage(error, "Failed to fetch sensor metrics"));
@@ -309,7 +333,7 @@ export const getLatestReading = async (
     if (metricsResult.error) {
       return fail(metricsResult.error);
     }
-    const deviceMetrics = metricsResult.data?.[tin];
+    const deviceMetrics = metricsResult.data?.metrics?.[tin];
     if (deviceMetrics && deviceMetrics.length > 0) {
       return ok(deviceMetrics[deviceMetrics.length - 1]);
     }
@@ -330,6 +354,8 @@ export interface SensorLiveReading {
   timestamp: Date;
   category: string;
   displayName: string;
+  /** When metric is a color (e.g. Addressable RGB), hex string for display */
+  valueDisplay?: string;
 }
 
 /**
@@ -367,40 +393,42 @@ export const pollSensorData = async (
     const metrics = metricsResult.data || [];
     const readings: SensorLiveReading[] = [];
 
-    const latestByTin = new Map<string, MetricRecord>();
+    const byTin = new Map<string, MetricRecord[]>();
     metrics.forEach((entry) => {
       const tin = entry.Tin;
       if (!tin) return;
-      const existing = latestByTin.get(tin);
-      if (!existing) {
-        latestByTin.set(tin, entry);
-        return;
-      }
-      const existingTime = new Date(existing.Time || 0).getTime();
-      const nextTime = new Date(entry.Time || 0).getTime();
-      if (nextTime >= existingTime) {
-        latestByTin.set(tin, entry);
-      }
+      const list = byTin.get(tin) || [];
+      list.push(entry);
+      byTin.set(tin, list);
     });
 
     const now = Date.now();
-    latestByTin.forEach((entry, tin) => {
-      const parsed = parseMetricValue(entry.Value);
-      if (parsed.value === null) return;
+    byTin.forEach((entries, tin) => {
+      const config = sensorsDeviceTins.find((c) => c.tin === tin);
+      const category = config?.category || normalizeCategoryKey(entries[0]?.["Device Type"]) || "sensor";
+      const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+      const preferColor = category === "led" || category === "addressable_rgb";
+      const colorEntry = preferColor ? entries.find((e) => isColorMetric(e.Metric, e.Value)) : null;
+      const latestByTime = entries.reduce((a, b) =>
+        new Date((b.Time || 0) as string).getTime() >= new Date((a.Time || 0) as string).getTime() ? b : a
+      );
+      const entry = colorEntry || latestByTime;
       const timestamp = new Date(entry.Time || new Date().toISOString());
       if (maxAgeMs && now - timestamp.getTime() > maxAgeMs) {
         return;
       }
-      const config = sensorsDeviceTins.find((c) => c.tin === tin);
-      const category = config?.category || normalizeCategoryKey(entry["Device Type"]) || "sensor";
-      const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+      const isColor = isColorMetric(entry.Metric, entry.Value);
+      const parsed = parseMetricValue(entry.Value);
+      const value = parsed.value ?? 0;
+      if (!isColor && parsed.value === null) return;
       readings.push({
         tin,
-        value: parsed.value,
-        unit: parsed.unit || categoryInfo.unit,
+        value,
+        unit: isColor ? "" : (parsed.unit || categoryInfo.unit),
         timestamp,
         category,
         displayName: config?.displayName || entry["Device Name"] || tin,
+        ...(isColor && entry.Value?.trim() && { valueDisplay: entry.Value.trim() }),
       });
     });
     

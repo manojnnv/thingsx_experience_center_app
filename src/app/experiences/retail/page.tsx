@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { colors } from "@/config/theme";
 import { Toaster, toast } from "sonner";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getCameras, getVideoFeedV2, CameraStream, StreamConfig, ModelConfig } from "@/app/services/realtime/realtime";
 import { updateEPDValue } from "@/app/services/epd/epd";
-import { getLayout } from "@/app/services/layout/layout";
+import { getLayout } from "@/lib/layout";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import {
   RetailHeader,
@@ -46,10 +46,10 @@ const TABS = {
 } as const;
 
 // ===========================================
-// Main Component
+// Main Component (uses useSearchParams via useQueryParams — must be inside Suspense)
 // ===========================================
 
-export default function RetailExperiencePage() {
+function RetailExperienceContent() {
   const { getParam } = useQueryParams();
   // Auth state
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -490,16 +490,10 @@ export default function RetailExperiencePage() {
   // Main Render
   // ===========================================
 
-  const gridColor = `${(accent || "").trim()}12`;
-
   return (
     <div
       className="min-h-screen text-white relative"
-      style={{
-        backgroundColor: colors.background,
-        backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
-        backgroundSize: "32px 32px",
-      }}
+      style={{ backgroundColor: colors.background }}
     >
       <Toaster position="top-right" richColors />
 
@@ -561,5 +555,25 @@ export default function RetailExperiencePage() {
         </main>
       </div>
     </div>
+  );
+}
+
+// Fallback shown during prerender / while search params are not yet available
+function RetailPageFallback() {
+  return (
+    <div
+      className="min-h-screen text-white relative flex items-center justify-center"
+      style={{ backgroundColor: colors.background }}
+    >
+      <span style={{ color: colors.textMuted }}>Loading...</span>
+    </div>
+  );
+}
+
+export default function RetailExperiencePage() {
+  return (
+    <Suspense fallback={<RetailPageFallback />}>
+      <RetailExperienceContent />
+    </Suspense>
   );
 }

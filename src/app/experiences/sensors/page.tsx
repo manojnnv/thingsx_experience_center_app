@@ -6,6 +6,8 @@ import {
   sensorsDeviceTins, 
   centralEndnode,
   categoryConfig,
+  categoryToLogo,
+  LOGOS_BASE,
   sensorEPDDevices,
   epdColorMap,
   EPDConfig,
@@ -15,6 +17,7 @@ import {
   fetchSensorMetrics,
   pollSensorData,
   SensorLiveReading,
+  type SensorMetric,
 } from "@/app/services/sensors/sensors";
 import { updateEPDValue, bulkUpdateEPD, BulkUpdatePayload } from "@/app/services/epd/epd";
 import { Toaster } from "sonner";
@@ -94,20 +97,24 @@ function Page() {
             config.category || normalizeCategoryKey(apiDevice?.device_type) || "sensor";
           const categoryInfo =
             categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+          const logoFile = categoryToLogo[category];
+          const iconPath = logoFile ? `${LOGOS_BASE}/${encodeURIComponent(logoFile)}` : undefined;
           return {
             tin: config.tin,
             name: config.displayName || apiDevice?.device_name || "Sensor",
-            type: categoryInfo.label,
+            type: apiDevice?.device_type ?? categoryInfo.label,
             category,
             status: "offline",
             lastReading: null,
             unit: categoryInfo.unit,
+            icon: iconPath ?? apiDevice?.device_icon,
           };
         });
         const end = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
         let metricsByTin: Record<string, { timestamp: string; value: number; unit?: string }[]> = {};
+        let iconsByTin: Record<string, string> = {};
         const metricsResult = await fetchSensorMetrics(
           deviceList.map((device) => device.tin),
           start.toISOString(),
@@ -116,21 +123,33 @@ function Page() {
         if (metricsResult.error) {
           console.warn("Failed to load sensor metrics:", metricsResult.error);
         } else {
-          metricsByTin = metricsResult.data || {};
+          metricsByTin = metricsResult.data?.metrics || {};
+          iconsByTin = metricsResult.data?.icons || {};
         }
 
         const deviceListWithReadings = deviceList.map((device) => {
           const metrics = metricsByTin[device.tin];
+          const iconFromMetrics = iconsByTin[device.tin];
+          const icon = device.icon ?? iconFromMetrics;
+          const isLedOrRgb = device.category === "led" || device.category === "addressable_rgb";
+          const colorMetric = isLedOrRgb && metrics?.length ? ([...metrics] as SensorMetric[]).reverse().find((m) => m.rawValue) : null;
+          const lastReadingDisplay = colorMetric?.rawValue;
           if (metrics && metrics.length > 0) {
             const latest = metrics[metrics.length - 1];
             return {
               ...device,
+              icon,
               lastReading: latest.value,
               unit: latest.unit || device.unit,
               lastReceivedAt: latest.timestamp ? new Date(latest.timestamp) : null,
+              ...(lastReadingDisplay && { lastReadingDisplay }),
             };
           }
-          return device;
+          return {
+            ...device,
+            icon,
+            ...(lastReadingDisplay && { lastReadingDisplay }),
+          };
         });
 
         setDevices(deviceListWithReadings);
@@ -184,6 +203,7 @@ function Page() {
             category: reading.category,
             lastReceivedAt: reading.timestamp,
             history: [...history, reading.value].slice(-30),
+            ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
           });
         });
         
@@ -201,6 +221,7 @@ function Page() {
               lastReading: reading.value,
               unit: reading.unit || device.unit,
               lastReceivedAt: reading.timestamp ? new Date(reading.timestamp) : new Date(),
+              ...(reading.valueDisplay && { lastReadingDisplay: reading.valueDisplay }),
             };
           }
           return device;
@@ -286,17 +307,10 @@ function Page() {
   // Tab configuration for AppTabs component
   const tabs = Object.values(TABS);
 
-  const accent = colors.sensorAccent ?? colors.yellow;
-  const gridColor = `${(accent || "").trim()}12`;
-
   return (
     <div
       className="min-h-screen text-white relative"
-      style={{
-        backgroundColor: colors.background,
-        backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
-        backgroundSize: "32px 32px",
-      }}
+      style={{ backgroundColor: colors.background }}
     >
       <Toaster position="top-right" richColors />
 

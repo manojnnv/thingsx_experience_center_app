@@ -46,11 +46,10 @@ function SensorsTopology({
             <line key={`line-${sensor.tin}`} x1={50} y1={50} x2={sensor.x} y2={sensor.y} stroke={colors.yellow} strokeWidth="0.4" opacity={0.5} />
           ))}
 
-          {/* Central Endnode */}
+          {/* Central Endnode - use End Node.png icon */}
           <g>
-            <circle cx={50} cy={50} r="8" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
-            <circle cx={50} cy={50} r="5" fill={`${colors.yellow}20`} />
-            <text x={50} y={51.5} textAnchor="middle" fill={colors.yellow} fontSize="3.5" fontWeight="bold">EN</text>
+            <circle cx={50} cy={50} r="10" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
+            <image href="/assets/Logos/End Node.png" x={38} y={38} width={24} height={24} preserveAspectRatio="xMidYMid meet" />
           </g>
           <text x={50} y={62} textAnchor="middle" fill={colors.text} fontSize="2.5" fontWeight="bold">{centralEndnode.displayName}</text>
           <text x={50} y={65} textAnchor="middle" fill={colors.yellow} fontSize="2">{connectedSensorsList.length} sensors connected</text>

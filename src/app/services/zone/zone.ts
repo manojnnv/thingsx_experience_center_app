@@ -3,7 +3,7 @@
  * Handles zone management API calls
  */
 
-import { get, post, put, del } from '../../utils/api';
+import { api } from '@/app/utils/api';
 
 export interface Zone {
   id: string;
@@ -30,48 +30,54 @@ export const zoneService = {
    * Get all zones
    */
   getAll: async (): Promise<Zone[]> => {
-    return get<Zone[]>('/api/zones');
+    const { data } = await api.get<Zone[]>('/api/zones');
+    return data;
   },
 
   /**
    * Get zone by ID
    */
   getById: async (id: string): Promise<Zone> => {
-    return get<Zone>(`/api/zones/${id}`);
+    const { data } = await api.get<Zone>(`/api/zones/${id}`);
+    return data;
   },
 
   /**
    * Create new zone
    */
   create: async (data: CreateZoneData): Promise<Zone> => {
-    return post<Zone>('/api/zones', data);
+    const { data: res } = await api.post<Zone>('/api/zones', data);
+    return res;
   },
 
   /**
    * Update zone
    */
   update: async (id: string, data: Partial<CreateZoneData>): Promise<Zone> => {
-    return put<Zone>(`/api/zones/${id}`, data);
+    const { data: res } = await api.put<Zone>(`/api/zones/${id}`, data);
+    return res;
   },
 
   /**
    * Delete zone
    */
   delete: async (id: string): Promise<void> => {
-    return del(`/api/zones/${id}`);
+    await api.delete(`/api/zones/${id}`);
   },
 
   /**
    * Add device to zone
    */
   addDevice: async (zoneId: string, deviceId: string): Promise<Zone> => {
-    return post<Zone>(`/api/zones/${zoneId}/devices`, { deviceId });
+    const { data } = await api.post<Zone>(`/api/zones/${zoneId}/devices`, { deviceId });
+    return data;
   },
 
   /**
    * Remove device from zone
    */
   removeDevice: async (zoneId: string, deviceId: string): Promise<Zone> => {
-    return del(`/api/zones/${zoneId}/devices/${deviceId}`);
+    const { data } = await api.delete<Zone>(`/api/zones/${zoneId}/devices/${deviceId}`);
+    return data;
   },
 };

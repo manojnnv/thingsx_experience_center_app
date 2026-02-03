@@ -3,7 +3,7 @@
  * Handles device management API calls
  */
 
-import { get, post, put, del } from '../../utils/api';
+import { api } from '@/app/utils/api';
 
 export interface Device {
   id: string;
@@ -27,41 +27,46 @@ export const deviceService = {
    * Get all devices
    */
   getAll: async (): Promise<Device[]> => {
-    return get<Device[]>('/api/devices');
+    const { data } = await api.get<Device[]>('/api/devices');
+    return data;
   },
 
   /**
    * Get device by ID
    */
   getById: async (id: string): Promise<Device> => {
-    return get<Device>(`/api/devices/${id}`);
+    const { data } = await api.get<Device>(`/api/devices/${id}`);
+    return data;
   },
 
   /**
    * Create new device
    */
   create: async (data: CreateDeviceData): Promise<Device> => {
-    return post<Device>('/api/devices', data);
+    const { data: res } = await api.post<Device>('/api/devices', data);
+    return res;
   },
 
   /**
    * Update device
    */
   update: async (id: string, data: Partial<CreateDeviceData>): Promise<Device> => {
-    return put<Device>(`/api/devices/${id}`, data);
+    const { data: res } = await api.put<Device>(`/api/devices/${id}`, data);
+    return res;
   },
 
   /**
    * Delete device
    */
   delete: async (id: string): Promise<void> => {
-    return del(`/api/devices/${id}`);
+    await api.delete(`/api/devices/${id}`);
   },
 
   /**
    * Get device status
    */
   getStatus: async (id: string): Promise<{ status: Device['status'] }> => {
-    return get(`/api/devices/${id}/status`);
+    const { data } = await api.get<{ status: Device['status'] }>(`/api/devices/${id}/status`);
+    return data;
   },
 };

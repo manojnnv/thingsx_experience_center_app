@@ -40,7 +40,7 @@ export const centralEndnode: EndnodeConfig = {
  * All sensors connect to the central endnode
  */
 export const sensorsDeviceTins: SensorConfig[] = [
-  { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature" },
+  { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature_probe" },
   { tin: "SN0002000001", displayName: "Accelerometer", category: "accelerometer" },
   { tin: "SN0006000001", displayName: "MQ2", category: "gas" },
   { tin: "SN0006000002", displayName: "MQ6", category: "gas" },
@@ -353,6 +353,7 @@ export const getRetailScreenTins = (): string[] => retailRackScreens.map((d) => 
  */
 export const categoryConfig: Record<string, { label: string; unit: string; icon: string }> = {
   temperature: { label: "Temperature", unit: "°C", icon: "thermometer" },
+  temperature_probe: { label: "Temperature Probe", unit: "°C", icon: "thermometer" },
   humidity: { label: "Humidity", unit: "%", icon: "droplet" },
   motion: { label: "Motion", unit: "", icon: "activity" },
   light: { label: "Light", unit: "lux", icon: "sun" },
@@ -364,7 +365,33 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   magnetometer: { label: "Magnetometer", unit: "µT", icon: "compass" },
   relay: { label: "Relay", unit: "state", icon: "toggle-right" },
   led: { label: "LED", unit: "", icon: "sun" },
+  addressable_rgb: { label: "Addressable RGB", unit: "", icon: "sun" },
   load_cell: { label: "Load Cell", unit: "kg", icon: "scale" },
+};
+
+/** Base path for device/sensor logos (public/assets/Logos) */
+export const LOGOS_BASE = "/assets/Logos";
+
+/**
+ * Sensor category → logo filename in public/assets/Logos.
+ * Used for Sensors & Endnodes tiles when API does not return an icon.
+ */
+export const categoryToLogo: Record<string, string> = {
+  temperature: "Ambient Temperature Sensor.svg",
+  temperature_probe: "DS18B20 temperature probe.svg",
+  humidity: "Temperature Humidity Sensor.png",
+  light: "Ambient Light Sensor.svg",
+  gas: "MQ2 General combustible gas  smoke.svg",
+  current: "Current Sensor.svg",
+  magnetometer: "3-Axis Electronic Compass Module Magnetic Field Sensor.svg",
+  relay: "Single Channel Relay.svg",
+  led: "Addressable RGB.svg",
+  addressable_rgb: "Addressable RGB.svg",
+  load_cell: "Load Cell.svg",
+  accelerometer: "Acclerometer Sensor.png",
+  pressure: "Air Pressure Sensor.svg",
+  air_quality: "Air Quality Sensor.png",
+  motion: "PIR Sensor.svg",
 };
 
 /**

@@ -21,18 +21,11 @@ export default function WarehouseExperiencePage() {
 
   const tabs = Object.values(TABS);
 
-  const accent = colors.warehouseAccent;
-  const gridColor = `${(accent || "").trim()}12`;
-
   return (
     <TooltipProvider>
       <div
         className="min-h-screen text-white relative"
-        style={{
-          backgroundColor: colors.background,
-          backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
-          backgroundSize: "32px 32px",
-        }}
+        style={{ backgroundColor: colors.background }}
       >
         <Toaster position="top-right" richColors />
 

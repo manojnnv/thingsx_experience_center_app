@@ -7,6 +7,10 @@ export type DisplayDevice = {
   lastReading: number | null;
   lastReceivedAt?: Date | null;
   unit: string;
+  /** When device is Addressable RGB/LED, hex color for display (from last reading) */
+  lastReadingDisplay?: string;
+  /** Icon from API (URL) or category icon key from config */
+  icon?: string;
 };
 
 export type SensorLiveData = {
@@ -17,6 +21,8 @@ export type SensorLiveData = {
   category: string;
   lastReceivedAt: Date;
   history: number[];
+  /** When sensor is Addressable RGB/LED, hex color for display */
+  valueDisplay?: string;
 };
 
 export type EPDFieldValues = {

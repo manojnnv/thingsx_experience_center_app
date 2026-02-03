@@ -22,8 +22,8 @@ function WarehouseIndoorPositioningTab({
 }: WarehouseIndoorPositioningTabProps) {
   const [loading, setLoading] = useState(false);
   const { editor, onReady } = useFabricJSEditor();
-  // Floor plan image - place your warehouse floor plan at /public/assets/new_office_warehouse.png
-  const image = "/assets/new_office_warehouse.png";
+  // Floor plan image from public/assets/Logos
+  const image = "/assets/Logos/new_office_warehouse.png";
   const canvasRef = useRef<HTMLDivElement>(null);
   const [allAsset, setAllAsset] = useState<Asset[]>([]);
   const [imageError, setImageError] = useState(false);
@@ -616,7 +616,7 @@ function WarehouseIndoorPositioningTab({
           });
       };
       loader.onerror = () => {
-        console.error("Failed to load floor plan image. Please add the image at /public/assets/new_office_warehouse.png");
+        console.error("Failed to load floor plan image. Please add the image at /public/assets/Logos/new_office_warehouse.png");
         setImageError(true);
       };
     } catch (e) {
@@ -744,7 +744,7 @@ function WarehouseIndoorPositioningTab({
           <p className="font-medium mb-1">Floor Plan Image Not Found</p>
           <p className="text-xs opacity-80">
             Please add your warehouse floor plan image at:{" "}
-            <code className="bg-black/30 px-1 rounded">/public/assets/new_office_warehouse.png</code>
+            <code className="bg-black/30 px-1 rounded">/public/assets/Logos/new_office_warehouse.png</code>
           </p>
         </div>
       )}

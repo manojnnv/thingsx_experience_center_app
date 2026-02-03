@@ -154,22 +154,41 @@ function SensorsSelectedDevicePanel({
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center"
+          className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
           style={{ backgroundColor: `${colors.sensorAccent}20` }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={colors.sensorAccent}
-            strokeWidth={1.5}
-            className="w-5 h-5"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546"
+          {selectedDevice.icon && (selectedDevice.icon.startsWith("http") || selectedDevice.icon.startsWith("/")) ? (
+            <div
+              className="w-8 h-8 shrink-0"
+              style={{
+                backgroundColor: colors.sensorAccent,
+                maskImage: `url(${selectedDevice.icon})`,
+                maskSize: "contain",
+                maskRepeat: "no-repeat",
+                maskPosition: "center",
+                WebkitMaskImage: `url(${selectedDevice.icon})`,
+                WebkitMaskSize: "contain",
+                WebkitMaskRepeat: "no-repeat",
+                WebkitMaskPosition: "center",
+              }}
+              role="img"
+              aria-label=""
             />
-          </svg>
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={colors.sensorAccent}
+              strokeWidth={1.5}
+              className="w-8 h-8"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546"
+              />
+            </svg>
+          )}
         </div>
         <div>
           <h3 className="text-lg font-semibold" style={{ color: colors.text }}>

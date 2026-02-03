@@ -10,7 +10,7 @@ import AppIconButton from "@/app/component/app-icon-button/AppIconButton";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
 import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatMap";
-import { getLayout } from "@/app/services/layout/layout";
+import { getLayout } from "@/lib/layout";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { getSiteId } from "@/config/site";
