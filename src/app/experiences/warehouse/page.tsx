@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { colors } from "@/config/theme";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import { WarehouseHeader, WarehouseIndoorPositioningTab } from "@/app/component/app-warehouse";
-import { Toaster } from "sonner";
+import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { useExperienceState } from "@/hooks/useExperienceState";
 
@@ -17,11 +17,21 @@ const TABS = {
 const TABS_ARRAY = Object.values(TABS);
 
 function WarehouseExperienceContent() {
-  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
     pageKey: "warehouse",
     tabs: TABS_ARRAY,
     defaultTab: TABS.indoorPositioning,
   });
+
+  // Show minimal loading state until localStorage check is complete
+  if (!isReady) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{ backgroundColor: colors.background }}
+      />
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -29,7 +39,7 @@ function WarehouseExperienceContent() {
         className="min-h-screen text-white relative"
         style={{ backgroundColor: colors.background }}
       >
-        <Toaster position="top-right" richColors />
+        <ThemedToaster accentColor={colors.warehouseAccent} />
 
         <VideoIntro
           show={showVideo}

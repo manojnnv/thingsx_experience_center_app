@@ -11,12 +11,16 @@ function SensorsHeader({
   onTabChange,
   accentColor,
   activeTab,
+  onRefresh,
+  isRefreshing,
 }: {
   tabs: string[];
   defaultTab: string;
   onTabChange: (tab: string) => void;
   accentColor?: string;
   activeTab?: string;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   return (
     <>
@@ -32,8 +36,8 @@ function SensorsHeader({
           <div className="w-20" />
         </div>
 
-        {/* Tab Navigation */}
-        <div className="px-8 py-4">
+        {/* Tab Navigation with Refresh Button */}
+        <div className="px-8 py-4 flex items-center justify-between">
           <AppTabs
             defaultTab={defaultTab}
             tabs={tabs}
@@ -42,6 +46,29 @@ function SensorsHeader({
             accentColor={accentColor}
             activeTab={activeTab}
           />
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-lg transition-all duration-300 hover:bg-white/10 disabled:opacity-50 ml-4"
+              style={{ color: colors.textMuted }}
+              title="Refresh data"
+            >
+              <svg
+                className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </header>
     </>

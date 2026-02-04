@@ -15,6 +15,8 @@ interface UseExperienceStateOptions {
 }
 
 interface UseExperienceStateReturn {
+    /** Whether the hook has finished initializing (localStorage check complete) */
+    isReady: boolean;
     /** Whether to show the video intro */
     showVideo: boolean;
     /** Skip the video intro and mark as seen */
@@ -29,6 +31,7 @@ interface UseExperienceStateReturn {
  * Hook to manage experience page state with persistence.
  * - Video intro skip status is stored in localStorage
  * - Active tab is stored in URL query params for deep linking (uses useSetQueryParam)
+ * - Returns isReady=false until localStorage check is complete to prevent flash
  */
 export function useExperienceState({
     pageKey,
@@ -41,7 +44,10 @@ export function useExperienceState({
     // Determine active tab from URL or use default
     const activeTab = tabParam && tabs.includes(tabParam) ? tabParam : defaultTab;
 
-    // Start with showVideo=true to match server render, then update after hydration
+    // Track if we've finished checking localStorage
+    const [isReady, setIsReady] = useState(false);
+
+    // Start with showVideo=true, will be updated after localStorage check
     const [showVideo, setShowVideo] = useState(true);
 
     // Check localStorage AFTER hydration to avoid server/client mismatch
@@ -50,6 +56,8 @@ export function useExperienceState({
         if (seen === "true") {
             setShowVideo(false);
         }
+        // Mark as ready after localStorage check
+        setIsReady(true);
     }, [pageKey]);
 
     // Skip video and persist to localStorage
@@ -67,6 +75,7 @@ export function useExperienceState({
     );
 
     return {
+        isReady,
         showVideo,
         skipVideo,
         activeTab,

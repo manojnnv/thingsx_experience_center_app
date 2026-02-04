@@ -287,7 +287,6 @@ export const getDeviceConfig = async (
     const resp = await api.post("v1/device/config/get", {
       tin,
     });
-    toast.message(resp?.data?.message);
     return ok(resp?.data?.data?.schema ?? null);
   } catch (error) {
     console.error("Error fetching device config:", error);
@@ -368,17 +367,17 @@ export const pollSensorData = async (
 ): Promise<ServiceResult<SensorLiveReading[]>> => {
   try {
     const configuredTins = getSensorTins();
-    
+
     if (configuredTins.length === 0) {
       return ok([]);
     }
-    
+
     // Check if we have auth tokens before making the request
     const accessToken = localStorage.getItem("access_token");
     if (!accessToken) {
       return fail("NOT_AUTHENTICATED");
     }
-    
+
     const end = new Date();
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -431,7 +430,7 @@ export const pollSensorData = async (
         ...(isColor && entry.Value?.trim() && { valueDisplay: entry.Value.trim() }),
       });
     });
-    
+
     return ok(readings);
   } catch (error: unknown) {
     // Handle specific error types
@@ -457,18 +456,18 @@ export const pollDashboardSensorMetrics = async (): Promise<ServiceResult<Sensor
       org_id: localStorage.getItem("org_id"),
       site_id: localStorage.getItem("site_id"),
     });
-    
+
     const data = resp?.data?.data || [];
     const configuredTins = getSensorTins();
     const readings: SensorLiveReading[] = [];
-    
+
     // Filter to only configured TINs
     data.forEach((item: { tin: string; value: number; timestamp: string; unit?: string }) => {
       if (configuredTins.includes(item.tin)) {
         const config = sensorsDeviceTins.find((c) => c.tin === item.tin);
         const category = config?.category || "sensor";
         const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
-        
+
         readings.push({
           tin: item.tin,
           value: item.value,
@@ -479,7 +478,7 @@ export const pollDashboardSensorMetrics = async (): Promise<ServiceResult<Sensor
         });
       }
     });
-    
+
     return ok(readings);
   } catch (error) {
     console.error("Error polling dashboard metrics:", error);

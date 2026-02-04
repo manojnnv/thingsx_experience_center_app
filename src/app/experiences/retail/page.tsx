@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { colors } from "@/config/theme";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
+import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getCameras, getVideoFeedV2, CameraStream, StreamConfig, ModelConfig } from "@/app/services/realtime/realtime";
 import { updateEPDValue } from "@/app/services/epd/epd";
@@ -51,7 +52,7 @@ function RetailExperienceContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Page state with persistence
-  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
     pageKey: "retail",
     tabs: TABS_ARRAY,
     defaultTab: TABS.stream,
@@ -489,12 +490,22 @@ function RetailExperienceContent() {
   // Main Render
   // ===========================================
 
+  // Show minimal loading state until localStorage check is complete
+  if (!isReady) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{ backgroundColor: colors.background }}
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen text-white relative"
       style={{ backgroundColor: colors.background }}
     >
-      <Toaster position="top-right" richColors />
+      <ThemedToaster accentColor={colors.retailAccent} />
 
       <VideoIntro
         show={showVideo}

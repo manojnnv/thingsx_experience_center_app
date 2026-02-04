@@ -22,7 +22,7 @@ import {
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
 import { updateEPDValue, bulkUpdateEPD, BulkUpdatePayload } from "@/app/services/epd/epd";
-import { Toaster } from "sonner";
+import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { useAuth } from "@/app/providers/AuthProvider";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import SensorsHeader from "@/app/component/app-experience/SensorsHeader";
@@ -50,7 +50,7 @@ function SensorsPageContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Page state with persistence
-  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
     pageKey: "sensors",
     tabs: TABS_ARRAY,
     defaultTab: TABS.grid,
@@ -76,101 +76,124 @@ function SensorsPageContent() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cleanupIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Ref to track when we're intentionally closing the sheet (to prevent race condition)
+  const isClosingRef = useRef(false);
+
+  // Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Initialize devices from config
-  useEffect(() => {
-    const loadDevices = async () => {
+  const loadDevices = React.useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
       setLoading(true);
-      try {
-        const deviceCodes = Array.from(
-          new Set(sensorsDeviceTins.map((config) => config.tin.slice(0, 6)))
-        );
-        const apiDevicesResult = await fetchDevicesByDeviceCodes(deviceCodes);
-        if (apiDevicesResult.error) {
-          console.warn("Failed to load device metadata:", apiDevicesResult.error);
-        }
-        const apiDevices = apiDevicesResult.data || [];
-        const apiByTin = new Map(apiDevices.map((d) => [d.tin, d]));
+    }
+    try {
+      const deviceCodes = Array.from(
+        new Set(sensorsDeviceTins.map((config) => config.tin.slice(0, 6)))
+      );
+      const apiDevicesResult = await fetchDevicesByDeviceCodes(deviceCodes);
+      if (apiDevicesResult.error) {
+        console.warn("Failed to load device metadata:", apiDevicesResult.error);
+      }
+      const apiDevices = apiDevicesResult.data || [];
+      const apiByTin = new Map(apiDevices.map((d) => [d.tin, d]));
 
-        const normalizeCategoryKey = (deviceType?: string) => {
-          if (!deviceType) return "sensor";
-          return deviceType
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
+      const normalizeCategoryKey = (deviceType?: string) => {
+        if (!deviceType) return "sensor";
+        return deviceType
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      };
+
+      const deviceList: DisplayDevice[] = sensorsDeviceTins.map((config) => {
+        const apiDevice = apiByTin.get(config.tin);
+        const category =
+          config.category || normalizeCategoryKey(apiDevice?.device_type) || "sensor";
+        const categoryInfo =
+          categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
+        const logoFile = categoryToLogo[category];
+        const iconPath = logoFile ? `${LOGOS_BASE}/${encodeURIComponent(logoFile)}` : undefined;
+        return {
+          tin: config.tin,
+          name: config.displayName || apiDevice?.device_name || "Sensor",
+          type: apiDevice?.device_type ?? categoryInfo.label,
+          category,
+          status: "offline",
+          lastReading: null,
+          unit: categoryInfo.unit,
+          icon: iconPath ?? apiDevice?.device_icon,
         };
+      });
+      const end = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      let metricsByTin: Record<string, { timestamp: string; value: number; unit?: string }[]> = {};
+      let iconsByTin: Record<string, string> = {};
+      const metricsResult = await fetchSensorMetrics(
+        deviceList.map((device) => device.tin),
+        start.toISOString(),
+        end.toISOString()
+      );
+      if (metricsResult.error) {
+        console.warn("Failed to load sensor metrics:", metricsResult.error);
+      } else {
+        metricsByTin = metricsResult.data?.metrics || {};
+        iconsByTin = metricsResult.data?.icons || {};
+      }
 
-        const deviceList: DisplayDevice[] = sensorsDeviceTins.map((config) => {
-          const apiDevice = apiByTin.get(config.tin);
-          const category =
-            config.category || normalizeCategoryKey(apiDevice?.device_type) || "sensor";
-          const categoryInfo =
-            categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
-          const logoFile = categoryToLogo[category];
-          const iconPath = logoFile ? `${LOGOS_BASE}/${encodeURIComponent(logoFile)}` : undefined;
-          return {
-            tin: config.tin,
-            name: config.displayName || apiDevice?.device_name || "Sensor",
-            type: apiDevice?.device_type ?? categoryInfo.label,
-            category,
-            status: "offline",
-            lastReading: null,
-            unit: categoryInfo.unit,
-            icon: iconPath ?? apiDevice?.device_icon,
-          };
-        });
-        const end = new Date();
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        let metricsByTin: Record<string, { timestamp: string; value: number; unit?: string }[]> = {};
-        let iconsByTin: Record<string, string> = {};
-        const metricsResult = await fetchSensorMetrics(
-          deviceList.map((device) => device.tin),
-          start.toISOString(),
-          end.toISOString()
-        );
-        if (metricsResult.error) {
-          console.warn("Failed to load sensor metrics:", metricsResult.error);
-        } else {
-          metricsByTin = metricsResult.data?.metrics || {};
-          iconsByTin = metricsResult.data?.icons || {};
-        }
-
-        const deviceListWithReadings = deviceList.map((device) => {
-          const metrics = metricsByTin[device.tin];
-          const iconFromMetrics = iconsByTin[device.tin];
-          const icon = device.icon ?? iconFromMetrics;
-          const isLedOrRgb = device.category === "led" || device.category === "addressable_rgb";
-          const colorMetric = isLedOrRgb && metrics?.length ? ([...metrics] as SensorMetric[]).reverse().find((m) => m.rawValue) : null;
-          const lastReadingDisplay = colorMetric?.rawValue;
-          if (metrics && metrics.length > 0) {
-            const latest = metrics[metrics.length - 1];
-            return {
-              ...device,
-              icon,
-              lastReading: latest.value,
-              unit: latest.unit || device.unit,
-              lastReceivedAt: latest.timestamp ? new Date(latest.timestamp) : null,
-              ...(lastReadingDisplay && { lastReadingDisplay }),
-            };
-          }
+      const deviceListWithReadings = deviceList.map((device) => {
+        const metrics = metricsByTin[device.tin];
+        const iconFromMetrics = iconsByTin[device.tin];
+        const icon = device.icon ?? iconFromMetrics;
+        const isLedOrRgb = device.category === "led" || device.category === "addressable_rgb";
+        const colorMetric = isLedOrRgb && metrics?.length ? ([...metrics] as SensorMetric[]).reverse().find((m) => m.rawValue) : null;
+        const lastReadingDisplay = colorMetric?.rawValue;
+        if (metrics && metrics.length > 0) {
+          const latest = metrics[metrics.length - 1];
           return {
             ...device,
             icon,
+            lastReading: latest.value,
+            unit: latest.unit || device.unit,
+            lastReceivedAt: latest.timestamp ? new Date(latest.timestamp) : null,
             ...(lastReadingDisplay && { lastReadingDisplay }),
           };
-        });
+        }
+        return {
+          ...device,
+          icon,
+          ...(lastReadingDisplay && { lastReadingDisplay }),
+        };
+      });
 
-        setDevices(deviceListWithReadings);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadDevices();
+      setDevices(deviceListWithReadings);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadDevices();
+  }, [loadDevices]);
+
+  // Refresh function for manual data refresh
+  const refreshDevices = React.useCallback(() => {
+    loadDevices(true);
+  }, [loadDevices]);
 
   // Auto-open device sheet if ?device= is present in URL after devices load
   useEffect(() => {
+    // Skip if we're intentionally closing
+    if (isClosingRef.current) {
+      isClosingRef.current = false;
+      return;
+    }
     if (!deviceParam || devices.length === 0) return;
     // If sheet is already open for this device, skip
     if (selectedDevice?.tin === deviceParam) return;
@@ -189,6 +212,7 @@ function SensorsPageContent() {
 
   // Helper to close the sheet (clears both state and URL)
   const handleCloseSheet = () => {
+    isClosingRef.current = true;
     setSelectedDevice(null);
     setDeviceParam(null);
   };
@@ -335,12 +359,22 @@ function SensorsPageContent() {
 
   const getDeviceForSensor = (tin: string) => devices.find((d) => d.tin === tin);
 
+  // Show minimal loading state until localStorage check is complete
+  if (!isReady) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{ backgroundColor: colors.background }}
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen text-white relative"
       style={{ backgroundColor: colors.background }}
     >
-      <Toaster position="top-right" richColors />
+      <ThemedToaster accentColor={colors.sensorAccent} />
 
       <VideoIntro show={showVideo} onSkip={skipVideo} />
 
@@ -352,6 +386,8 @@ function SensorsPageContent() {
           defaultTab={TABS.grid}
           onTabChange={(tab) => setActiveTab(tab)}
           accentColor={colors.sensorAccent}
+          onRefresh={refreshDevices}
+          isRefreshing={isRefreshing}
         />
 
         {/* Content Area */}
