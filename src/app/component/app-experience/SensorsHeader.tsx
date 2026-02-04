@@ -10,11 +10,13 @@ function SensorsHeader({
   defaultTab,
   onTabChange,
   accentColor,
+  activeTab,
 }: {
   tabs: string[];
   defaultTab: string;
   onTabChange: (tab: string) => void;
   accentColor?: string;
+  activeTab?: string;
 }) {
   return (
     <>
@@ -38,6 +40,7 @@ function SensorsHeader({
             tabContents={[]}
             onTabChange={onTabChange}
             accentColor={accentColor}
+            activeTab={activeTab}
           />
         </div>
       </header>

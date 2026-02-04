@@ -9,7 +9,7 @@ import AppTooltip from "@/app/component/app-tooltip/AppTooltip";
 import AppIconButton from "@/app/component/app-icon-button/AppIconButton";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
-import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatMap";
+import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatmap";
 import { getLayout } from "@/lib/layout";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
@@ -129,7 +129,7 @@ function HeatmapView({
 
     const existingOverlays = canvas.getObjects().filter((o: any) => o.isHeatmapOverlay);
     existingOverlays.forEach((o: any) => {
-      try { canvas.remove(o); } catch {}
+      try { canvas.remove(o); } catch { }
     });
 
     const floorplan = canvas.getObjects().find((o: any) => o.isLayout || o.type === "image");
@@ -210,10 +210,10 @@ function HeatmapView({
         }
 
         if ((obj as any).zoneCountLabel) {
-          try { canvas.remove((obj as any).zoneCountLabel); } catch {}
+          try { canvas.remove((obj as any).zoneCountLabel); } catch { }
         }
         if ((obj as any).zoneLabelBg) {
-          try { canvas.remove((obj as any).zoneLabelBg); } catch {}
+          try { canvas.remove((obj as any).zoneLabelBg); } catch { }
         }
 
         const labelText = hasNumericCount ? String(count) : "—";
@@ -251,7 +251,7 @@ function HeatmapView({
         (lbl as any).isZoneCountLabel = true;
         canvas.add(lbl);
         (obj as any).zoneCountLabel = lbl;
-      } catch {}
+      } catch { }
     });
 
     const heatmapCanvas = document.createElement("canvas");
@@ -300,7 +300,7 @@ function HeatmapView({
       if (floorplan) canvas.sendObjectToBack(floorplan);
       canvas.getObjects().forEach((obj: any) => {
         if ((obj as any).isZoneLabelBg || (obj as any).isZoneCountLabel) {
-          try { canvas.bringObjectToFront(obj); } catch {}
+          try { canvas.bringObjectToFront(obj); } catch { }
         }
       });
       canvas.requestRenderAll();
@@ -395,7 +395,7 @@ function HeatmapView({
         editor.canvas.setHeight(canvasRef.current.clientHeight);
       }
       editor.canvas.loadFromJSON(layoutJson).then(async () => {
-        try { setDottedGridBackground(); } catch {}
+        try { setDottedGridBackground(); } catch { }
         const floor = editor.canvas.getObjects().find((o: any) => o.type === "image");
         if (floor) {
           (floor as any).isLayout = true;
@@ -403,14 +403,14 @@ function HeatmapView({
             floor.selectable = false;
             floor.evented = false;
             editor.canvas.sendObjectToBack(floor);
-          } catch {}
+          } catch { }
         }
         editor.canvas.requestRenderAll();
         try {
           setTimeout(() => {
-            try { applyHeatmap(); } catch {}
+            try { applyHeatmap(); } catch { }
           }, 50);
-        } catch {}
+        } catch { }
       });
     } catch (e) {
       console.error("Failed to load layout into canvas:", e);
@@ -529,7 +529,7 @@ function HeatmapView({
                 }
               }
             }
-          } catch {}
+          } catch { }
         }
         if (found) {
           const zid = (found as any).zoneId ?? (found as any).id ?? null;
@@ -556,7 +556,7 @@ function HeatmapView({
         } else {
           setSelectedZone({ id: null, name: null });
         }
-      } catch {}
+      } catch { }
     };
     canvas.on("mouse:down", handleClick);
     return () => canvas.off("mouse:down", handleClick);
@@ -572,15 +572,15 @@ function HeatmapView({
       setLoading(true);
       const response = isProduct
         ? await productInteraction({
-            siteId: getSiteId(),
-            startDate: dateAndTime[0],
-            endDate: dateAndTime[1],
-          })
+          siteId: getSiteId(),
+          startDate: dateAndTime[0],
+          endDate: dateAndTime[1],
+        })
         : await zoneCountHeatMap({
-            siteId: getSiteId(),
-            startDate: dateAndTime[0],
-            endDate: dateAndTime[1],
-          });
+          siteId: getSiteId(),
+          startDate: dateAndTime[0],
+          endDate: dateAndTime[1],
+        });
       if (response.error) {
         console.warn("Failed to load heatmap:", response.error);
         setHeatMapData([]);
@@ -588,7 +588,7 @@ function HeatmapView({
       }
       const data = response?.data || [];
       setHeatMapData(data);
-      try { applyHeatmap(data); } catch {}
+      try { applyHeatmap(data); } catch { }
     } finally {
       setLoading(false);
     }
@@ -600,15 +600,15 @@ function HeatmapView({
         setLoading(true);
         const response = isProduct
           ? await productInteraction({
-              siteId: getSiteId(),
-              startDate: dateAndTime[0],
-              endDate: dateAndTime[1],
-            })
+            siteId: getSiteId(),
+            startDate: dateAndTime[0],
+            endDate: dateAndTime[1],
+          })
           : await zoneCountHeatMap({
-              siteId: getSiteId(),
-              startDate: dateAndTime[0],
-              endDate: dateAndTime[1],
-            });
+            siteId: getSiteId(),
+            startDate: dateAndTime[0],
+            endDate: dateAndTime[1],
+          });
         if (response.error) {
           console.warn("Failed to load heatmap:", response.error);
           setHeatMapData([]);
@@ -616,7 +616,7 @@ function HeatmapView({
         }
         const data = response?.data || [];
         setHeatMapData(data);
-        try { applyHeatmap(data); } catch {}
+        try { applyHeatmap(data); } catch { }
       } finally {
         setLoading(false);
       }
@@ -826,7 +826,7 @@ function HeatmapView({
               <Card className="p-3 rounded-2xl" style={{ borderColor: colors.border, backgroundColor: colors.backgroundCard }}>
                 <div className="font-semibold mb-2">Demographics</div>
                 {(selectedZoneData as any).demographics &&
-                typeof (selectedZoneData as any).demographics === "object" ? (
+                  typeof (selectedZoneData as any).demographics === "object" ? (
                   Object.entries((selectedZoneData as any).demographics).map(([key, val]) => (
                     <div key={key} className="mb-2">
                       <div className="font-semibold">{String(key).trim()}</div>

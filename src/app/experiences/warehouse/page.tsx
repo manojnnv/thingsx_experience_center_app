@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense } from "react";
 import { colors } from "@/config/theme";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import { WarehouseHeader, WarehouseIndoorPositioningTab } from "@/app/component/app-warehouse";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
+import { useExperienceState } from "@/hooks/useExperienceState";
 
 // Tab configuration
 const TABS = {
@@ -13,13 +14,14 @@ const TABS = {
   railCam: "Rail Cam",
 } as const;
 
-type ActiveTab = (typeof TABS)[keyof typeof TABS];
+const TABS_ARRAY = Object.values(TABS);
 
-export default function WarehouseExperiencePage() {
-  const [showVideo, setShowVideo] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS.indoorPositioning);
-
-  const tabs = Object.values(TABS);
+function WarehouseExperienceContent() {
+  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+    pageKey: "warehouse",
+    tabs: TABS_ARRAY,
+    defaultTab: TABS.indoorPositioning,
+  });
 
   return (
     <TooltipProvider>
@@ -31,7 +33,7 @@ export default function WarehouseExperiencePage() {
 
         <VideoIntro
           show={showVideo}
-          onSkip={() => setShowVideo(false)}
+          onSkip={skipVideo}
           title="Warehouse Experience"
           subtitle="Experience indoor positioning, rail cam monitoring, and logistics optimization."
           buttonLabel="Enter"
@@ -45,10 +47,11 @@ export default function WarehouseExperiencePage() {
           }
         >
           <WarehouseHeader
-            tabs={tabs}
+            tabs={TABS_ARRAY}
             defaultTab={TABS.indoorPositioning}
-            onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+            onTabChange={(tab) => setActiveTab(tab)}
             accentColor={colors.warehouseAccent}
+            activeTab={activeTab}
           />
 
           {/* Content Area */}
@@ -96,3 +99,23 @@ export default function WarehouseExperiencePage() {
     </TooltipProvider>
   );
 }
+
+function WarehousePageFallback() {
+  return (
+    <div
+      className="min-h-screen text-white relative flex items-center justify-center"
+      style={{ backgroundColor: colors.background }}
+    >
+      <span style={{ color: colors.textMuted }}>Loading...</span>
+    </div>
+  );
+}
+
+export default function WarehouseExperiencePage() {
+  return (
+    <Suspense fallback={<WarehousePageFallback />}>
+      <WarehouseExperienceContent />
+    </Suspense>
+  );
+}
+

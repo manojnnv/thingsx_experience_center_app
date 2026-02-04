@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import { useExperienceState } from "@/hooks/useExperienceState";
+import { useSetQueryParam } from "@/hooks/useSetQueryParam";
 import { colors } from "@/config/theme";
-import { 
-  sensorsDeviceTins, 
+import {
+  sensorsDeviceTins,
   centralEndnode,
   categoryConfig,
   categoryToLogo,
@@ -41,28 +43,35 @@ const TABS = {
   epd: "EPD Control",
 } as const;
 
-function Page() {
+const TABS_ARRAY = Object.values(TABS);
+
+function SensorsPageContent() {
   // Auth state
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  
-  // Page state
-  const [showVideo, setShowVideo] = useState(true);
-  type ActiveTab = (typeof TABS)[keyof typeof TABS];
-  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS.grid);
+
+  // Page state with persistence
+  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+    pageKey: "sensors",
+    tabs: TABS_ARRAY,
+    defaultTab: TABS.grid,
+  });
   const [loading, setLoading] = useState(true);
   const [devices, setDevices] = useState<DisplayDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DisplayDevice | null>(null);
-  
+
+  // URL-based device selection for sheet persistence
+  const [deviceParam, setDeviceParam] = useSetQueryParam("device");
+
   // Topology state
   const [connectedSensors, setConnectedSensors] = useState<Map<string, SensorLiveData>>(new Map());
   const [isPolling, setIsPolling] = useState(false);
   const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
   const [pollingError, setPollingError] = useState<string | null>(null);
-  
+
   // EPD state
   const [epdValues, setEpdValues] = useState<EPDFieldValues>({});
   const [updating, setUpdating] = useState(false);
-  
+
   // Refs for intervals
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cleanupIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -160,6 +169,30 @@ function Page() {
     loadDevices();
   }, []);
 
+  // Auto-open device sheet if ?device= is present in URL after devices load
+  useEffect(() => {
+    if (!deviceParam || devices.length === 0) return;
+    // If sheet is already open for this device, skip
+    if (selectedDevice?.tin === deviceParam) return;
+
+    const found = devices.find((d) => d.tin === deviceParam);
+    if (found) {
+      setSelectedDevice(found);
+    }
+  }, [deviceParam, devices, selectedDevice?.tin]);
+
+  // Helper to select a device (updates both state and URL)
+  const handleSelectDevice = (device: DisplayDevice | null) => {
+    setSelectedDevice(device);
+    setDeviceParam(device?.tin ?? null);
+  };
+
+  // Helper to close the sheet (clears both state and URL)
+  const handleCloseSheet = () => {
+    setSelectedDevice(null);
+    setDeviceParam(null);
+  };
+
   // Initialize EPD values
   useEffect(() => {
     const initialValues: EPDFieldValues = {};
@@ -176,25 +209,25 @@ function Page() {
   const pollForData = async () => {
     setIsPolling(true);
     const pollResult = await pollSensorData(SENSOR_TIMEOUT_MS);
-    
+
     if (pollResult.error) {
       setPollingError("Connection error. Retrying...");
       setIsPolling(false);
       return;
     }
-    
+
     setPollingError(null);
     setLastPollTime(new Date());
-    
+
     const readings = pollResult.data || [];
     if (readings.length > 0) {
       setConnectedSensors((prev) => {
         const updated = new Map(prev);
-        
+
         readings.forEach((reading) => {
           const existing = updated.get(reading.tin);
           const history = existing?.history || [];
-          
+
           updated.set(reading.tin, {
             tin: reading.tin,
             value: reading.value,
@@ -206,10 +239,10 @@ function Page() {
             ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
           });
         });
-        
+
         return updated;
       });
-      
+
       // Update device status
       setDevices((prev) =>
         prev.map((device) => {
@@ -228,7 +261,7 @@ function Page() {
         })
       );
     }
-    
+
     setIsPolling(false);
   };
 
@@ -236,11 +269,11 @@ function Page() {
   const cleanupDisconnectedSensors = () => {
     const now = new Date();
     const disconnectedTins: string[] = [];
-    
+
     setConnectedSensors((prev) => {
       const updated = new Map(prev);
       let hasChanges = false;
-      
+
       prev.forEach((sensor, tin) => {
         const timeSinceLastData = now.getTime() - sensor.lastReceivedAt.getTime();
         if (timeSinceLastData > SENSOR_TIMEOUT_MS) {
@@ -249,10 +282,10 @@ function Page() {
           hasChanges = true;
         }
       });
-      
+
       return hasChanges ? updated : prev;
     });
-    
+
     if (disconnectedTins.length > 0) {
       setDevices((prev) =>
         prev.map((device) => {
@@ -270,11 +303,11 @@ function Page() {
     if (activeTab !== TABS.topology || showVideo || !isAuthenticated || authLoading) {
       return;
     }
-    
+
     pollForData();
     pollIntervalRef.current = setInterval(pollForData, POLL_INTERVAL_MS);
     cleanupIntervalRef.current = setInterval(cleanupDisconnectedSensors, 1000);
-    
+
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (cleanupIntervalRef.current) clearInterval(cleanupIntervalRef.current);
@@ -302,11 +335,6 @@ function Page() {
 
   const getDeviceForSensor = (tin: string) => devices.find((d) => d.tin === tin);
 
-  const skipVideo = () => setShowVideo(false);
-
-  // Tab configuration for AppTabs component
-  const tabs = Object.values(TABS);
-
   return (
     <div
       className="min-h-screen text-white relative"
@@ -319,9 +347,10 @@ function Page() {
       {/* Main Content */}
       <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
         <SensorsHeader
-          tabs={tabs}
+          tabs={TABS_ARRAY}
+          activeTab={activeTab}
           defaultTab={TABS.grid}
-          onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+          onTabChange={(tab) => setActiveTab(tab)}
           accentColor={colors.sensorAccent}
         />
 
@@ -335,8 +364,8 @@ function Page() {
               devices={devices}
               connectedSensors={connectedSensors}
               selectedDevice={selectedDevice}
-              onSelectDevice={setSelectedDevice}
-              onClose={() => setSelectedDevice(null)}
+              onSelectDevice={handleSelectDevice}
+              onClose={handleCloseSheet}
               centralEndnode={centralEndnode}
             />
           )}
@@ -346,7 +375,7 @@ function Page() {
             <SensorsTopology
               connectedSensors={connectedSensors}
               getDeviceForSensor={getDeviceForSensor}
-              onSelectDevice={setSelectedDevice}
+              onSelectDevice={handleSelectDevice}
               sensorTimeoutMs={SENSOR_TIMEOUT_MS}
               centralEndnode={centralEndnode}
               categoryConfig={categoryConfig}
@@ -372,7 +401,7 @@ function Page() {
             open={Boolean(selectedDevice)}
             onOpenChange={(open) => {
               if (!open) {
-                setSelectedDevice(null);
+                handleCloseSheet();
               }
             }}
             title="Device Details"
@@ -383,7 +412,7 @@ function Page() {
               selectedDevice={selectedDevice}
               connectedSensors={connectedSensors}
               centralEndnode={centralEndnode}
-              onClose={() => setSelectedDevice(null)}
+              onClose={handleCloseSheet}
             />
           </AppSheet>
         )}
@@ -392,4 +421,22 @@ function Page() {
   );
 }
 
-export default Page;
+// Fallback shown during prerender / while search params are not yet available
+function SensorsPageFallback() {
+  return (
+    <div
+      className="min-h-screen text-white relative flex items-center justify-center"
+      style={{ backgroundColor: colors.background }}
+    >
+      <span style={{ color: colors.textMuted }}>Loading...</span>
+    </div>
+  );
+}
+
+export default function SensorsPage() {
+  return (
+    <Suspense fallback={<SensorsPageFallback />}>
+      <SensorsPageContent />
+    </Suspense>
+  );
+}

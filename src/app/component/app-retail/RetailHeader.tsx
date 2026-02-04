@@ -11,12 +11,14 @@ function RetailHeader({
   defaultTab,
   onTabChange,
   accentColor,
+  activeTab,
 }: {
   accent: string;
   tabs: string[];
   defaultTab: string;
   onTabChange: (tab: string) => void;
   accentColor?: string;
+  activeTab?: string;
 }) {
   return (
     <>
@@ -35,7 +37,6 @@ function RetailHeader({
         </div>
       </header>
 
-      {/* Tab Navigation */}
       <div className="px-8 py-4">
         <AppTabs
           defaultTab={defaultTab}
@@ -43,6 +44,7 @@ function RetailHeader({
           tabContents={[]}
           onTabChange={onTabChange}
           accentColor={accentColor || accent}
+          activeTab={activeTab}
         />
       </div>
     </>

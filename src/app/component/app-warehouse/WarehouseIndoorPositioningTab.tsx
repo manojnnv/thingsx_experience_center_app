@@ -119,11 +119,11 @@ function WarehouseIndoorPositioningTab({
           const d = (rawItem?.data ?? rawItem ?? {}) as Record<string, unknown>;
           const assetIdVal = String(
             rawItem.asset_id ??
-              rawItem.assetId ??
-              d.asset_id ??
-              d.assetId ??
-              d.id ??
-              Math.random()
+            rawItem.assetId ??
+            d.asset_id ??
+            d.assetId ??
+            d.id ??
+            Math.random()
           );
 
           // Get raw coordinates

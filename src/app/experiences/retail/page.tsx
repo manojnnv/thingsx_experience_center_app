@@ -20,6 +20,7 @@ import type { EPDConfig } from "@/config/devices";
 import { epdColorMap, retailESLDevices } from "@/config/devices";
 import type { EPDFieldValues } from "@/app/component/app-experience/types";
 import { useQueryParams } from "@/hooks/useQueryParams";
+import { useExperienceState } from "@/hooks/useExperienceState";
 
 // ===========================================
 // Page Accent Color
@@ -27,13 +28,6 @@ import { useQueryParams } from "@/hooks/useQueryParams";
 
 const accent = colors.retailAccent;
 const CustomDropdown = RetailCustomDropdown;
-
-// ===========================================
-// Types
-// ===========================================
-
-type ActiveTab = (typeof TABS)[keyof typeof TABS];
-
 
 // ===========================================
 // Tab Configuration
@@ -45,6 +39,8 @@ const TABS = {
   analytics: "Analytics",
 } as const;
 
+const TABS_ARRAY = Object.values(TABS);
+
 // ===========================================
 // Main Component (uses useSearchParams via useQueryParams — must be inside Suspense)
 // ===========================================
@@ -54,9 +50,12 @@ function RetailExperienceContent() {
   // Auth state
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-  // Page state
-  const [showVideo, setShowVideo] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>(TABS.stream);
+  // Page state with persistence
+  const { showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+    pageKey: "retail",
+    tabs: TABS_ARRAY,
+    defaultTab: TABS.stream,
+  });
 
   // Stream state
   const [cameras, setCameras] = useState<CameraStream[]>([]);
@@ -267,7 +266,7 @@ function RetailExperienceContent() {
   // Render: Video Intro
   // ===========================================
 
-  
+
 
   // ===========================================
   // Render: Stream Tab
@@ -499,7 +498,7 @@ function RetailExperienceContent() {
 
       <VideoIntro
         show={showVideo}
-        onSkip={() => setShowVideo(false)}
+        onSkip={skipVideo}
         title="Retail Simulation"
         subtitle="Experience real-time video streaming with model selection and EPD control."
         buttonLabel="Skip Intro"
@@ -509,10 +508,11 @@ function RetailExperienceContent() {
       <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
         <RetailHeader
           accent={accent}
-          tabs={Object.values(TABS)}
+          tabs={TABS_ARRAY}
           defaultTab={TABS.stream}
-          onTabChange={(tab) => setActiveTab(tab as ActiveTab)}
+          onTabChange={(tab) => setActiveTab(tab)}
           accentColor={accent}
+          activeTab={activeTab}
         />
 
         {/* Content */}

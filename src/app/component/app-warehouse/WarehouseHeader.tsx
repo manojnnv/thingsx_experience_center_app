@@ -10,6 +10,7 @@ interface WarehouseHeaderProps {
   defaultTab: string;
   onTabChange: (tab: string) => void;
   accentColor?: string;
+  activeTab?: string;
 }
 
 function WarehouseHeader({
@@ -17,6 +18,7 @@ function WarehouseHeader({
   defaultTab,
   onTabChange,
   accentColor = colors.warehouseAccent,
+  activeTab,
 }: WarehouseHeaderProps) {
   return (
     <header
@@ -61,6 +63,7 @@ function WarehouseHeader({
           tabContents={[]}
           onTabChange={onTabChange}
           accentColor={accentColor}
+          activeTab={activeTab}
         />
       </div>
     </header>

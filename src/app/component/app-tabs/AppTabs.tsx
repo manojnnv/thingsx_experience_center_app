@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Tabs,
   TabsContent,
@@ -8,14 +8,15 @@ import {
 } from "@/app/components/ui/tabs";
 import { colors } from "@/config/theme";
 
-type AppTabs = {
+type AppTabsProps = {
   defaultTab: string;
   tabs: string[];
   tabContents: React.ReactNode[];
   className?: string;
   onTabChange?: (tab: string) => void;
   accentColor?: string;
-  // icons: string[];
+  /** Controlled active tab - when provided, component is controlled by parent */
+  activeTab?: string;
 };
 
 function AppTabs({
@@ -25,16 +26,27 @@ function AppTabs({
   className,
   onTabChange,
   accentColor,
-}: AppTabs) {
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  activeTab: controlledActiveTab,
+}: AppTabsProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState(defaultTab);
+
+  // Use controlled value if provided, otherwise use internal state
+  const activeTab = controlledActiveTab ?? internalActiveTab;
   const accent = accentColor || colors.primary;
+
+  // Sync internal state when controlled value changes
+  useEffect(() => {
+    if (controlledActiveTab !== undefined) {
+      setInternalActiveTab(controlledActiveTab);
+    }
+  }, [controlledActiveTab]);
 
   return (
     <div className="w-full mt-2">
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
-          setActiveTab(value);
+          setInternalActiveTab(value);
           if (onTabChange) {
             onTabChange(value);
           }
