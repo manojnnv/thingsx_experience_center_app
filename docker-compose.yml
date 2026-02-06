@@ -1,0 +1,12 @@
+services:
+  experience-centre-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thingsx/experience-centre-app
+    container_name: experience-centre-app
+    ports:
+      - "80:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
