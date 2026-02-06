@@ -1,0 +1,20 @@
+name: Local Docker Compose Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - thingsx-exp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy containers
+        run: |
+          docker compose pull
+          docker compose up -d --build
