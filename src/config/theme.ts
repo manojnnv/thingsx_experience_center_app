@@ -25,19 +25,19 @@ export const theme = {
     borderSubtle: " #151515",
 
     // Accent colors
-    orange: " #ff9f43",
-    purple: " #5f27cd",
-    blue: " #00d2d3",
-    yellow: " #ffd700",
+    orange: "#00E676",
+    purple: "#00E676",
+    blue: "#00E676",
+    yellow: "#00E676",
 
     // Experience-specific accent colors
-    sensorAccent: " #ffd700", // Yellow for Sensors & Endnodes
-    retailAccent: " #00E676", // Green for Retail Experience
-    retailAccentHover: " #00ee7e",
+    sensorAccent: "#00E676", // Green for Sensors & Endnodes
+    retailAccent: "#00E676", // Green for Retail Experience
+    retailAccentHover: "#00ee7e",
     retailAccentMuted: "rgba(0, 230, 118, 0.3)",
     retailAccentFaint: "rgba(0, 230, 118, 0.05)",
-    warehouseAccent: " #ff9f43", // Orange for Warehouse Experience
-    innovationLabAccent: " #00E676", // Green for Innovation Lab
+    warehouseAccent: "#00E676", // Green for Warehouse Experience
+    innovationLabAccent: "#00E676", // Green for Innovation Lab
 
     // Star/constellation colors
     starBright: " #00E676",
@@ -90,6 +90,6 @@ export type ThemeOpacity = typeof theme.opacity;
 export type Theme = typeof theme;
 
 // Convenience export for colors
-export const colors = theme.colors;
+export const { colors } = theme;
 
 export default theme;
