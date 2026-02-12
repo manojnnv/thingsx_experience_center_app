@@ -4,12 +4,12 @@ import { colors } from "@/config/theme";
 
 export function ArchitectureDiagram() {
   return (
-    <div className="relative w-full flex justify-center mt-2">
+    <div className="relative w-full h-full flex justify-center">
       <div className="relative w-full max-w-6xl flex items-center">
         <svg
           viewBox="0 0 650 560"
-          className="w-full max-w-4xl h-auto"
-          style={{ maxHeight: "55vh", minHeight: "400px" }}
+          className="w-full max-w-4xl h-full mx-auto"
+          style={{ maxHeight: "100%" }}
         >
           <defs>
             <filter id="glow">
