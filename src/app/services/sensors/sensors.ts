@@ -358,9 +358,129 @@ export interface SensorLiveReading {
 }
 
 /**
+ * Connect to SSE stream for live sensor data
+ */
+export const connectToSensorStream = (
+  onMessage: (readings: SensorLiveReading[]) => void,
+  onError: (error: string) => void,
+  signal: AbortSignal
+): void => {
+  const configuredTins = getSensorTins();
+  // Filter out load cells and RGBs as requested
+  const tinsToMonitor = configuredTins.filter((tin) => {
+    const config = sensorsDeviceTins.find((c) => c.tin === tin);
+    return (
+      config?.category !== "load_cell" &&
+      config?.category !== "addressable_rgb" &&
+      config?.category !== "led"
+    );
+  });
+
+  if (tinsToMonitor.length === 0) return;
+
+  const token = localStorage.getItem("access_token");
+  if (!token) {
+    onError("NOT_AUTHENTICATED");
+    return;
+  }
+
+  fetch("https://tgx-app-api.dev.intellobots.com/v1/device/latest/live", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(tinsToMonitor),
+    signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        if (response.status === 401) onError("NOT_AUTHENTICATED");
+        else onError(`HTTP Error: ${response.status}`);
+        return;
+      }
+      if (!response.body) {
+        onError("No response body");
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        // Keep the last chunk if it's incomplete
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+
+          try {
+            const jsonStr = trimmed.substring(5).trim();
+            const payload = JSON.parse(jsonStr);
+
+            if (payload.status === "stream" && payload.data) {
+              const readings: SensorLiveReading[] = [];
+
+              // Parse payload.data: { TIN: { metric: { value, timestamp } } }
+              Object.entries(payload.data).forEach(([tin, metrics]: [string, any]) => {
+                const config = sensorsDeviceTins.find((c) => c.tin === tin);
+                const category = config?.category || "sensor";
+                const categoryInfo = categoryConfig[category] || {
+                  label: "Sensor",
+                  unit: "",
+                  icon: "sensor",
+                };
+
+                // Convert all metrics for this TIN into readings
+                // For topology we essentially just update the latest value.
+                // If multiple metrics exist, we might generate multiple readings or just pick one.
+                // Our topology UI tends to show one main value per sensor node.
+                // We'll prioritize based on category similar to before if possible, 
+                // or just take the first valid numeric/color one.
+
+                Object.entries(metrics).forEach(([, metricData]: [string, any]) => {
+                  // Ensure we have a valid value
+                  if (metricData?.value === undefined) return;
+
+                  readings.push({
+                    tin,
+                    value: Number(metricData.value),
+                    unit: categoryInfo.unit,
+                    timestamp: new Date(metricData.timestamp),
+                    category,
+                    displayName: config?.displayName || tin,
+                  });
+                });
+              });
+
+              if (readings.length > 0) {
+                onMessage(readings);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing SSE data", e);
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError(err.message);
+      }
+    });
+};
+
+/**
  * Poll sensor data for all configured TINs
- * Returns only sensors that have data
- * Returns { readings, error } to allow caller to handle errors gracefully
+ * ... existing implementation ...
  */
 export const pollSensorData = async (
   maxAgeMs?: number

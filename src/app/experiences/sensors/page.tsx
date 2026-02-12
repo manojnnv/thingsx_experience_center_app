@@ -18,6 +18,7 @@ import {
   fetchDevicesByDeviceCodes,
   fetchSensorMetrics,
   pollSensorData,
+  connectToSensorStream,
   SensorLiveReading,
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
@@ -229,114 +230,112 @@ function SensorsPageContent() {
     setEpdValues(initialValues);
   }, []);
 
-  // Poll for real sensor data
-  const pollForData = async () => {
-    setIsPolling(true);
-    const pollResult = await pollSensorData(SENSOR_TIMEOUT_MS);
-
-    if (pollResult.error) {
-      setPollingError("Connection error. Retrying...");
-      setIsPolling(false);
-      return;
-    }
-
-    setPollingError(null);
-    setLastPollTime(new Date());
-
-    const readings = pollResult.data || [];
-    if (readings.length > 0) {
-      setConnectedSensors((prev) => {
-        const updated = new Map(prev);
-
-        readings.forEach((reading) => {
-          const existing = updated.get(reading.tin);
-          const history = existing?.history || [];
-
-          updated.set(reading.tin, {
-            tin: reading.tin,
-            value: reading.value,
-            unit: reading.unit,
-            displayName: reading.displayName,
-            category: reading.category,
-            lastReceivedAt: reading.timestamp,
-            history: [...history, reading.value].slice(-30),
-            ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
-          });
-        });
-
-        return updated;
-      });
-
-      // Update device status
-      setDevices((prev) =>
-        prev.map((device) => {
-          const reading = readings.find((r) => r.tin === device.tin);
-          if (reading) {
-            return {
-              ...device,
-              status: "online",
-              lastReading: reading.value,
-              unit: reading.unit || device.unit,
-              lastReceivedAt: reading.timestamp ? new Date(reading.timestamp) : new Date(),
-              ...(reading.valueDisplay && { lastReadingDisplay: reading.valueDisplay }),
-            };
-          }
-          return device;
-        })
-      );
-    }
-
-    setIsPolling(false);
-  };
-
-  // Cleanup disconnected sensors
-  const cleanupDisconnectedSensors = () => {
-    const now = new Date();
-    const disconnectedTins: string[] = [];
-
-    setConnectedSensors((prev) => {
-      const updated = new Map(prev);
-      let hasChanges = false;
-
-      prev.forEach((sensor, tin) => {
-        const timeSinceLastData = now.getTime() - sensor.lastReceivedAt.getTime();
-        if (timeSinceLastData > SENSOR_TIMEOUT_MS) {
-          updated.delete(tin);
-          disconnectedTins.push(tin);
-          hasChanges = true;
-        }
-      });
-
-      return hasChanges ? updated : prev;
-    });
-
-    if (disconnectedTins.length > 0) {
-      setDevices((prev) =>
-        prev.map((device) => {
-          if (disconnectedTins.includes(device.tin)) {
-            return { ...device, status: "offline" };
-          }
-          return device;
-        })
-      );
-    }
-  };
-
-  // Start polling when topology tab is active and authenticated
+  // SSE Connection and Data Handling
   useEffect(() => {
     if (activeTab !== TABS.topology || showVideo || !isAuthenticated || authLoading) {
       return;
     }
 
-    pollForData();
-    pollIntervalRef.current = setInterval(pollForData, POLL_INTERVAL_MS);
-    cleanupIntervalRef.current = setInterval(cleanupDisconnectedSensors, 1000);
+    const abortController = new AbortController();
+    let retryTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      setIsPolling(true); // Acts as "Connecting" status
+
+      connectToSensorStream(
+        (readings) => {
+          setPollingError(null);
+          setLastPollTime(new Date());
+
+          // Batch update connected sensors
+          setConnectedSensors((prev) => {
+            const updated = new Map(prev);
+
+            readings.forEach((reading) => {
+              const existing = updated.get(reading.tin);
+              const history = existing?.history || [];
+
+              // Only update if timestamp is newer or same (avoid out of order)
+              if (existing && reading.timestamp < existing.lastReceivedAt) {
+                return;
+              }
+
+              updated.set(reading.tin, {
+                tin: reading.tin,
+                value: reading.value,
+                unit: reading.unit,
+                displayName: reading.displayName,
+                category: reading.category,
+                lastReceivedAt: reading.timestamp,
+                history: [...history, reading.value].slice(-30),
+                ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
+              });
+            });
+            return updated;
+          });
+
+          // Update devices status
+          setDevices((prev) =>
+            prev.map((device) => {
+              const reading = readings.find((r) => r.tin === device.tin);
+              if (reading) {
+                return {
+                  ...device,
+                  status: "online",
+                  lastReading: reading.value,
+                  unit: reading.unit || device.unit,
+                  lastReceivedAt: reading.timestamp,
+                  ...(reading.valueDisplay && { lastReadingDisplay: reading.valueDisplay }),
+                };
+              }
+              return device;
+            })
+          );
+        },
+        (err) => {
+          if (err !== "AbortError") {
+            console.error("SSE Error:", err);
+            setPollingError("Connection lost. Retrying...");
+            // Retry after 5s
+            retryTimeout = setTimeout(connect, 5000);
+          }
+        },
+        abortController.signal
+      );
+    };
+
+    connect();
+
+    // Separate cleanup interval for stale sensors
+    const cleanupInterval = setInterval(() => {
+      const now = new Date();
+      const disconnectedTins: string[] = [];
+      setConnectedSensors((prev) => {
+        const updated = new Map(prev);
+        let hasChanges = false;
+        prev.forEach((sensor, tin) => {
+          if (now.getTime() - sensor.lastReceivedAt.getTime() > SENSOR_TIMEOUT_MS) {
+            updated.delete(tin);
+            disconnectedTins.push(tin);
+            hasChanges = true;
+          }
+        });
+        return hasChanges ? updated : prev;
+      });
+
+      if (disconnectedTins.length > 0) {
+        setDevices(prev => prev.map(d =>
+          disconnectedTins.includes(d.tin) ? { ...d, status: 'offline' } : d
+        ));
+      }
+    }, 1000);
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-      if (cleanupIntervalRef.current) clearInterval(cleanupIntervalRef.current);
+      abortController.abort();
+      clearTimeout(retryTimeout);
+      clearInterval(cleanupInterval);
+      setIsPolling(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, showVideo, isAuthenticated, authLoading]);
 
   // EPD handlers
@@ -409,6 +408,7 @@ function SensorsPageContent() {
           {/* Dynamic Live Topology */}
           {!loading && activeTab === TABS.topology && (
             <SensorsTopology
+              devices={devices}
               connectedSensors={connectedSensors}
               getDeviceForSensor={getDeviceForSensor}
               onSelectDevice={handleSelectDevice}

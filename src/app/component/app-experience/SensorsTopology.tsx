@@ -5,6 +5,7 @@ import { colors } from "@/config/theme";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
 function SensorsTopology({
+  devices,
   connectedSensors,
   getDeviceForSensor,
   onSelectDevice,
@@ -12,6 +13,7 @@ function SensorsTopology({
   centralEndnode,
   categoryConfig,
 }: {
+  devices: DisplayDevice[];
   connectedSensors: Map<string, SensorLiveData>;
   getDeviceForSensor: (tin: string) => DisplayDevice | undefined;
   onSelectDevice: (device: DisplayDevice) => void;
@@ -20,10 +22,14 @@ function SensorsTopology({
   categoryConfig: Record<string, { label?: string }>;
 }) {
   const connectedSensorsList = Array.from(connectedSensors.values());
-  const sensorPositions = connectedSensorsList.map((sensor, i) => {
-    const angle = (i / Math.max(connectedSensorsList.length, 1)) * 2 * Math.PI - Math.PI / 2;
+
+  // Calculate fixed positions based on ALL configured devices (Stable Slots)
+  // This ensures the layout doesn't shift when a sensor goes offline
+  const sensorPositions = devices.map((device, i) => {
+    // Distribute evenly around the circle
+    const angle = (i / Math.max(devices.length, 1)) * 2 * Math.PI - Math.PI / 2;
     return {
-      tin: sensor.tin,
+      tin: device.tin,
       x: 50 + 35 * Math.cos(angle),
       y: 50 + 35 * Math.sin(angle),
     };
@@ -36,15 +42,28 @@ function SensorsTopology({
         <svg viewBox="0 0 100 100" className="w-full h-full">
           <defs>
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="0.8" result="coloredBlur"/>
-              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              <feGaussianBlur stdDeviation="0.8" result="coloredBlur" />
+              <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
           </defs>
 
           {/* Lines from Endnode to Sensors */}
-          {sensorPositions.map((sensor) => (
-            <line key={`line-${sensor.tin}`} x1={50} y1={50} x2={sensor.x} y2={sensor.y} stroke={colors.yellow} strokeWidth="0.4" opacity={0.5} />
-          ))}
+          {sensorPositions.map((sensorPos) => {
+            // Only render line if sensor is connected
+            if (!connectedSensors.has(sensorPos.tin)) return null;
+
+            return (
+              <line
+                key={`line-${sensorPos.tin}`}
+                x1={50} y1={50}
+                x2={sensorPos.x} y2={sensorPos.y}
+                stroke={colors.yellow}
+                strokeWidth="0.4"
+                opacity={0.5}
+                className="transition-all duration-500 ease-in-out"
+              />
+            );
+          })}
 
           {/* Central Endnode - use End Node.png icon */}
           <g>
@@ -55,16 +74,29 @@ function SensorsTopology({
           <text x={50} y={65} textAnchor="middle" fill={colors.yellow} fontSize="2">{connectedSensorsList.length} sensors connected</text>
 
           {/* Sensor Nodes */}
-          {sensorPositions.map((sensor) => {
-            const sensorData = connectedSensors.get(sensor.tin);
-            const device = getDeviceForSensor(sensor.tin);
+          {sensorPositions.map((sensorPos) => {
+            const sensorData = connectedSensors.get(sensorPos.tin);
+            const device = getDeviceForSensor(sensorPos.tin);
+
+            // "Stable Invisible Slots": If offline, we just don't render it.
+            // The position (x,y) is still reserved for it.
             if (!sensorData) return null;
+
             return (
-              <g key={sensor.tin} className="cursor-pointer" onClick={() => device && onSelectDevice(device)}>
-                <circle cx={sensor.x} cy={sensor.y} r="3.5" fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
-                <circle cx={sensor.x} cy={sensor.y} r="1.5" fill={colors.primary} />
-                <text x={sensor.x} y={sensor.y + 7} textAnchor="middle" fill={colors.yellow} fontSize="2" fontWeight="bold">{sensorData.value.toFixed(1)}{sensorData.unit}</text>
-                <text x={sensor.x} y={sensor.y + 9.5} textAnchor="middle" fill={colors.textMuted} fontSize="1.5">{sensorData.displayName}</text>
+              <g
+                key={sensorPos.tin}
+                className="cursor-pointer transition-all duration-500 ease-in-out"
+                onClick={() => device && onSelectDevice(device)}
+                style={{ transformOrigin: `${sensorPos.x}px ${sensorPos.y}px` }}
+              >
+                <circle cx={sensorPos.x} cy={sensorPos.y} r="3.5" fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" className="transition-all duration-500" />
+                <circle cx={sensorPos.x} cy={sensorPos.y} r="1.5" fill={colors.primary} className="transition-all duration-500" />
+                <text x={sensorPos.x} y={sensorPos.y + 7} textAnchor="middle" fill={colors.yellow} fontSize="2" fontWeight="bold" className="transition-all duration-500">
+                  {sensorData.value.toFixed(1)}{sensorData.unit}
+                </text>
+                <text x={sensorPos.x} y={sensorPos.y + 9.5} textAnchor="middle" fill={colors.textMuted} fontSize="1.5" className="transition-all duration-500">
+                  {sensorData.displayName}
+                </text>
               </g>
             );
           })}
@@ -92,7 +124,7 @@ function SensorsTopology({
           <h3 className="text-lg font-bold" style={{ color: colors.text }}>Connected Sensors - Real-time Data</h3>
           <p className="text-sm" style={{ color: colors.textMuted }}>{connectedSensorsList.length} sensor{connectedSensorsList.length !== 1 ? "s" : ""} actively transmitting</p>
         </div>
-        
+
         {connectedSensorsList.length === 0 ? (
           <div className="p-8 text-center" style={{ color: colors.textMuted }}>
             <p>No sensors are currently transmitting data.</p>
@@ -116,7 +148,7 @@ function SensorsTopology({
                   const history = sensor.history || [];
                   const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
                   const timeSinceData = Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000);
-                  
+
                   return (
                     <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
                       <td className="px-4 py-3">
