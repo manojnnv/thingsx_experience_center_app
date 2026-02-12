@@ -5,7 +5,7 @@ import { colors } from "@/config/theme";
 
 function ExperiencesTitle() {
   return (
-    <div className="text-center mb-6">
+    <div className="text-center mb-10">
       <div className="flex items-center justify-center gap-3 mb-4">
         <div
           className="h-[2px] w-12"
