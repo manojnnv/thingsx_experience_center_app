@@ -8,14 +8,14 @@ import { colors } from "@/config/theme";
 export default function ExperiencesPage() {
   return (
     <div
-      className="min-h-screen text-white relative overflow-hidden"
+      className="h-screen text-white relative overflow-hidden flex flex-col"
       style={{ backgroundColor: colors.background }}
     >
       <ExperiencesBackground />
       <ExperiencesHeader />
 
       {/* Main Content */}
-      <main className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-8 py-12">
+      <main className="relative z-10 flex flex-col items-center justify-center flex-1 min-h-0 px-8 py-4">
         <ExperiencesTitle />
         <ExperiencesTiles />
       </main>

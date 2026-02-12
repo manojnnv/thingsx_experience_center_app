@@ -52,9 +52,9 @@ function WarehouseExperienceContent() {
 
         {/* Main Content */}
         <div
-          className={
+          className={`flex flex-col h-screen ${
             showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"
-          }
+          }`}
         >
           <WarehouseHeader
             tabs={TABS_ARRAY}
@@ -65,7 +65,7 @@ function WarehouseExperienceContent() {
           />
 
           {/* Content Area */}
-          <main className="px-8 py-6">
+          <main className="px-8 py-2 flex-1 min-h-0">
             {/* Indoor Positioning Tab */}
             {activeTab === TABS.indoorPositioning && (
               <WarehouseIndoorPositioningTab accentColor={colors.warehouseAccent} />

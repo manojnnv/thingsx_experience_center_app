@@ -364,7 +364,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     canvas.requestRenderAll();
   };
 
-  // Canvas mouse wheel zoom (Ctrl to zoom, Shift for horizontal scroll, else vertical)
+  // Canvas mouse wheel zoom (Ctrl + wheel only; scroll-panning removed)
   useEffect(() => {
     if (!editor?.canvas) return;
     const { canvas } = editor;
@@ -382,21 +382,6 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         e.preventDefault();
         e.stopPropagation();
         setZoom(z);
-        return;
-      } else if (e.shiftKey) {
-        const vpt = canvas.viewportTransform!;
-        vpt[4] += -delta;
-        canvas.requestRenderAll();
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      } else {
-        const vpt = canvas.viewportTransform!;
-        vpt[5] += -delta;
-        canvas.requestRenderAll();
-        e.preventDefault();
-        e.stopPropagation();
-        return;
       }
     };
 
@@ -711,16 +696,16 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
   }, [siteID]);
 
   return (
-    <div className="relative w-[99%] mx-auto ">
+    <div className="relative w-full h-full flex flex-col overflow-hidden">
       {loading && (
-        <div className="w-full h-screen absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="w-full h-full absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="text-lg font-semibold">
             <AppLoading />
           </div>
         </div>
       )}
-      <div className="text-[1.2rem] font-semibold" style={{ color: colors.text }}>Indoor Positioning</div>
-      <div className="flex gap-2 justify-between items-end">
+      <div className="flex-none text-[1.2rem] font-semibold py-1" style={{ color: colors.text }}>Indoor Positioning</div>
+      <div className="flex-none flex gap-2 justify-between items-end pb-1">
         <AppSelect
           className="w-64"
           label="Select Asset"
@@ -737,17 +722,13 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
           }}
           variant="default"
           label={liveTracking ? "Stop Live" : "Live Tracking"}
-        //   className={`px-3 py-1 rounded-md text-sm font-medium ${
-        //     liveTracking ? "bg-red-600 text-white" : "bg-emerald-600 text-white"
-        //   }`}
         >
-          {/* {liveTracking ? "Stop Live" : "Live Tracking"} */}
         </AppButton>
       </div>
-      <div>
+      <div className="flex-1 min-h-0">
         <div
           ref={canvasRef}
-          className="flex-1 border border-black rounded-md m-2 relative"
+          className="h-full border rounded-md relative overflow-hidden"
           style={{ borderColor: colors.border }}
         >
           <div className="absolute left-5 bottom-5 flex gap-1 z-50">
@@ -761,58 +742,28 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
 
           <div className="absolute right-5 bottom-5 flex gap-1 z-50">
             <AppTooltip label="Zoom In">
-              <div className="bg-black w-8 h-8 grid items-center justify-center rounded-md " style={{ backgroundColor: colors.backgroundElevated }}>
-                <Plus className=" text-white" onClick={zoomIn} size={18} style={{ color: colors.text }} />
+              <div className="w-8 h-8 grid items-center justify-center rounded-md" style={{ backgroundColor: colors.backgroundElevated }}>
+                <Plus onClick={zoomIn} size={18} style={{ color: colors.text }} />
               </div>
             </AppTooltip>
             <AppTooltip label="Zoom Out">
-              <div className="bg-black w-8 h-8 grid items-center justify-center rounded-md " style={{ backgroundColor: colors.backgroundElevated }}>
-                <Minus className=" text-white" onClick={zoomOut} size={18} style={{ color: colors.text }} />
+              <div className="w-8 h-8 grid items-center justify-center rounded-md" style={{ backgroundColor: colors.backgroundElevated }}>
+                <Minus onClick={zoomOut} size={18} style={{ color: colors.text }} />
               </div>
             </AppTooltip>
             <AppTooltip label="Reset Zoom">
-              <div className="bg-black w-8 h-8 grid items-center justify-center rounded-md " style={{ backgroundColor: colors.backgroundElevated }}>
+              <div className="w-8 h-8 grid items-center justify-center rounded-md" style={{ backgroundColor: colors.backgroundElevated }}>
                 <RotateCcw
-                  className=" text-white"
                   onClick={resetZoom}
                   size={18}
                   style={{ color: colors.text }}
                 />
               </div>
             </AppTooltip>
-
-            <div className="flex items-center gap-2">
-              {/* <input
-                type="number"
-                value={assetId}
-                onChange={(e) => setAssetId(Number(e.target.value))}
-                className="w-16 h-8 text-sm rounded-md border px-2"
-                title="Asset ID"
-              /> */}
-
-              {/* <button
-                onClick={() => {
-                  // sample payload from user for quick test
-                  const sample = [
-                    {
-                      asset_id: "7",
-                      asset_name: "pallete-2",
-                      timestamp: "2025-09-16T14:00:03.339519+00:00",
-                      x: 181.69639125976877,
-                      y: 76.30366054125258,
-                    },
-                  ];
-                  updateLiveMarker(sample);
-                }}
-                className={`px-3 py-1 rounded-md text-sm font-medium bg-blue-600 text-white`}
-              >
-                Plot Sample
-              </button> */}
-            </div>
           </div>
 
           <FabricJSCanvas
-            className="sample-canvas border border-gray-300 rounded-md h-[80vh] w-full"
+            className="sample-canvas border border-gray-300 rounded-md h-full w-full"
             onReady={onReady}
           />
         </div>

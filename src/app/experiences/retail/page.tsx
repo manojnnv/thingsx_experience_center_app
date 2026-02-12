@@ -516,7 +516,7 @@ function RetailExperienceContent() {
         accentColor={accent}
       />
 
-      <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
+      <div className={`flex flex-col h-screen ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}`}>
         <RetailHeader
           accent={accent}
           tabs={TABS_ARRAY}
@@ -527,7 +527,7 @@ function RetailExperienceContent() {
         />
 
         {/* Content */}
-        <main className="px-8 py-6">
+        <main className="px-8 py-2 flex-1 min-h-0">
           {activeTab === TABS.stream && (
             <RetailStreamTab
               accent={accent}

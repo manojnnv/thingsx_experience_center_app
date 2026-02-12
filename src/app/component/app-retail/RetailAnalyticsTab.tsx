@@ -478,18 +478,6 @@ function HeatmapView({
         opt.e.preventDefault();
         opt.e.stopPropagation();
         setZoom(z);
-      } else if (opt.e.shiftKey) {
-        const vpt = canvas.viewportTransform!;
-        vpt[4] += -delta;
-        canvas.requestRenderAll();
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
-      } else {
-        const vpt = canvas.viewportTransform!;
-        vpt[5] += -delta;
-        canvas.requestRenderAll();
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
       }
     };
     canvas.on("mouse:wheel", handleWheel);
@@ -625,18 +613,18 @@ function HeatmapView({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full overflow-hidden">
       {loading && (
-        <div className="w-full h-[80vh] absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="w-full h-full absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="text-sm" style={{ color: colors.text }}>Loading...</div>
         </div>
       )}
-      <div className="w-full grid place-content-end">
+      <div className="flex-none w-full grid place-content-end py-1">
         <DateTimePicker onchange={onchangeDateAndTiem} onsubmit={fetchHeatMap} />
       </div>
       <div
         ref={canvasRef}
-        className="flex-1 border rounded-md my-2 relative w-[96vw] max-w-none"
+        className="flex-1 min-h-0 border rounded-md relative w-full"
         style={{ borderColor: colors.border }}
       >
         <div className="absolute left-3 top-3 z-50 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2">
@@ -694,7 +682,7 @@ function HeatmapView({
           </div>
         )}
         <FabricJSCanvas
-          className="sample-canvas border border-gray-300 rounded-md h-[80vh] w-[96vw]"
+          className="sample-canvas border border-gray-300 rounded-md h-full w-full"
           onReady={onReady}
         />
         <HeatmapLegend
@@ -860,8 +848,8 @@ export default function RetailAnalyticsTab({ accent }: { accent: string }) {
   const [analyticsType, setAnalyticsType] = useState<"zone" | "product">("zone");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-none flex items-center justify-between flex-wrap gap-4 pb-1">
         <div>
           <h2 className="text-2xl font-bold mb-1" style={{ color: colors.text }}>
             {analyticsType === "zone" ? "Retail Analytics" : "Product Interaction"}
@@ -891,7 +879,9 @@ export default function RetailAnalyticsTab({ accent }: { accent: string }) {
         </div>
       </div>
 
-      <HeatmapView mode={analyticsType} accent={accent} />
+      <div className="flex-1 min-h-0">
+        <HeatmapView mode={analyticsType} accent={accent} />
+      </div>
     </div>
   );
 }
