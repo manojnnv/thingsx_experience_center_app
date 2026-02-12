@@ -720,9 +720,9 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         </div>
       )}
       <div className="text-[1.2rem] font-semibold" style={{ color: colors.text }}>Indoor Positioning</div>
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 justify-between items-end">
         <AppSelect
-          className="w-full"
+          className="w-64"
           label="Select Asset"
           onchange={onSelcteAsset}
           options={allAsset?.map((item: any, i: any) => ({
