@@ -239,10 +239,10 @@ function SensorsPageContent() {
     const abortController = new AbortController();
     let retryTimeout: NodeJS.Timeout;
 
-    const connect = () => {
+    const connect = async () => {
       setIsPolling(true); // Acts as "Connecting" status
 
-      connectToSensorStream(
+      await connectToSensorStream(
         (readings) => {
           setPollingError(null);
           setLastPollTime(new Date());

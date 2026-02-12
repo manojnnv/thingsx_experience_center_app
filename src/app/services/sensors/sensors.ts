@@ -358,13 +358,24 @@ export interface SensorLiveReading {
 }
 
 /**
- * Connect to SSE stream for live sensor data
+ * Connect to SSE stream for live sensor data.
+ *
+ * Uses the Fetch API with ReadableStream to consume an SSE endpoint that
+ * requires a POST body (list of TINs). The standard EventSource API only
+ * supports GET, so we stream manually.
+ *
+ * Key points:
+ * - Calls ensureAuth() before every connection attempt so the token is fresh.
+ * - Sends Accept: text/event-stream and cache: no-cache for proper SSE
+ *   behaviour in browsers and proxies.
+ * - Parses the SSE wire format: blocks separated by blank lines, each
+ *   containing one or more "data:" lines.
  */
-export const connectToSensorStream = (
+export const connectToSensorStream = async (
   onMessage: (readings: SensorLiveReading[]) => void,
   onError: (error: string) => void,
   signal: AbortSignal
-): void => {
+): Promise<void> => {
   const configuredTins = getSensorTins();
   // Filter out load cells and RGBs as requested
   const tinsToMonitor = configuredTins.filter((tin) => {
@@ -378,59 +389,87 @@ export const connectToSensorStream = (
 
   if (tinsToMonitor.length === 0) return;
 
+  // --- Ensure we have a valid access token before connecting ----------
+  const { ensureAuth } = await import("@/app/services/auth/auth");
+  const authed = await ensureAuth();
+  if (!authed) {
+    onError("NOT_AUTHENTICATED");
+    return;
+  }
+
   const token = localStorage.getItem("access_token");
   if (!token) {
     onError("NOT_AUTHENTICATED");
     return;
   }
 
-  fetch("https://tgx-app-api.dev.intellobots.com/v1/device/latest/live", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(tinsToMonitor),
-    signal,
-  })
-    .then(async (response) => {
-      if (!response.ok) {
-        if (response.status === 401) onError("NOT_AUTHENTICATED");
-        else onError(`HTTP Error: ${response.status}`);
-        return;
+  const API_BASE =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://tgx-app-api.dev.intellobots.com";
+
+  try {
+    const response = await fetch(`${API_BASE}/v1/device/latest/live`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(tinsToMonitor),
+      signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token was stale – clear it so ensureAuth() re-logs in on next retry
+        localStorage.removeItem("access_token");
+        onError("NOT_AUTHENTICATED");
+      } else {
+        onError(`HTTP Error: ${response.status}`);
       }
-      if (!response.body) {
-        onError("No response body");
-        return;
-      }
+      return;
+    }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+    if (!response.body) {
+      onError("No response body – streaming not supported");
+      return;
+    }
 
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    // --- Read the stream --------------------------------------------------
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        // Keep the last chunk if it's incomplete
-        buffer = lines.pop() || "";
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
+      buffer += decoder.decode(value, { stream: true });
 
-          try {
-            const jsonStr = trimmed.substring(5).trim();
-            const payload = JSON.parse(jsonStr);
+      // SSE events are separated by blank lines (\n\n).
+      // Split on that boundary, keeping the last (possibly incomplete) chunk.
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() || "";
 
-            if (payload.status === "stream" && payload.data) {
-              const readings: SensorLiveReading[] = [];
+      for (const block of blocks) {
+        // Each block can have multiple "data:" lines; concatenate them.
+        const dataLines = block
+          .split("\n")
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.substring(5).trim());
 
-              // Parse payload.data: { TIN: { metric: { value, timestamp } } }
-              Object.entries(payload.data).forEach(([tin, metrics]: [string, any]) => {
+        if (dataLines.length === 0) continue;
+        const jsonStr = dataLines.join("");
+
+        try {
+          const payload = JSON.parse(jsonStr);
+
+          if (payload.status === "stream" && payload.data) {
+            const readings: SensorLiveReading[] = [];
+
+            // Parse payload.data: { TIN: { metric: { value, timestamp } } }
+            Object.entries(payload.data).forEach(
+              ([tin, metrics]: [string, any]) => {
                 const config = sensorsDeviceTins.find((c) => c.tin === tin);
                 const category = config?.category || "sensor";
                 const categoryInfo = categoryConfig[category] || {
@@ -439,43 +478,37 @@ export const connectToSensorStream = (
                   icon: "sensor",
                 };
 
-                // Convert all metrics for this TIN into readings
-                // For topology we essentially just update the latest value.
-                // If multiple metrics exist, we might generate multiple readings or just pick one.
-                // Our topology UI tends to show one main value per sensor node.
-                // We'll prioritize based on category similar to before if possible, 
-                // or just take the first valid numeric/color one.
+                Object.entries(metrics).forEach(
+                  ([, metricData]: [string, any]) => {
+                    if (metricData?.value === undefined) return;
 
-                Object.entries(metrics).forEach(([, metricData]: [string, any]) => {
-                  // Ensure we have a valid value
-                  if (metricData?.value === undefined) return;
-
-                  readings.push({
-                    tin,
-                    value: Number(metricData.value),
-                    unit: categoryInfo.unit,
-                    timestamp: new Date(metricData.timestamp),
-                    category,
-                    displayName: config?.displayName || tin,
-                  });
-                });
-              });
-
-              if (readings.length > 0) {
-                onMessage(readings);
+                    readings.push({
+                      tin,
+                      value: Number(metricData.value),
+                      unit: categoryInfo.unit,
+                      timestamp: new Date(metricData.timestamp),
+                      category,
+                      displayName: config?.displayName || tin,
+                    });
+                  }
+                );
               }
+            );
+
+            if (readings.length > 0) {
+              onMessage(readings);
             }
-          } catch (e) {
-            console.error("Error parsing SSE data", e);
           }
+        } catch (e) {
+          // Silently skip malformed JSON chunks – the next event will come
+          console.warn("SSE: skipped malformed event", e);
         }
       }
-    })
-    .catch((err) => {
-      if (err.name !== "AbortError") {
-        onError(err.message);
-      }
-    });
+    }
+  } catch (err: any) {
+    if (err?.name === "AbortError") return; // intentional teardown
+    onError(err?.message || String(err));
+  }
 };
 
 /**
