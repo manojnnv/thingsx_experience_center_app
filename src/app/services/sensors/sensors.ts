@@ -407,6 +407,8 @@ export const connectToSensorStream = async (
     process.env.NEXT_PUBLIC_API_URL ||
     "https://tgx-app-api.dev.intellobots.com";
 
+  console.log("[SSE] Connecting with TINs:", tinsToMonitor);
+
   try {
     const response = await fetch(`${API_BASE}/v1/device/latest/live`, {
       method: "POST",
@@ -414,13 +416,15 @@ export const connectToSensorStream = async (
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(tinsToMonitor),
+      body: JSON.stringify({ tins: tinsToMonitor }),
       signal,
     });
 
+    console.log("[SSE] Response status:", response.status, response.statusText);
+    console.log("[SSE] Content-Type:", response.headers.get("content-type"));
+
     if (!response.ok) {
       if (response.status === 401) {
-        // Token was stale – clear it so ensureAuth() re-logs in on next retry
         localStorage.removeItem("access_token");
         onError("NOT_AUTHENTICATED");
       } else {
@@ -434,17 +438,31 @@ export const connectToSensorStream = async (
       return;
     }
 
+    console.log("[SSE] Stream connected, reading data...");
+
     // --- Read the stream --------------------------------------------------
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let chunkCount = 0;
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        console.log("[SSE] Stream ended (done=true). Total chunks received:", chunkCount);
+        break;
+      }
 
-      buffer += decoder.decode(value, { stream: true });
+      chunkCount++;
+      const chunk = decoder.decode(value, { stream: true });
+
+      // Log first few chunks raw to see what the server sends
+      if (chunkCount <= 5) {
+        console.log(`[SSE] Raw chunk #${chunkCount}:`, JSON.stringify(chunk).slice(0, 500));
+      }
+
+      buffer += chunk;
 
       // SSE events are separated by blank lines (\n\n).
       // Split on that boundary, keeping the last (possibly incomplete) chunk.
@@ -458,11 +476,21 @@ export const connectToSensorStream = async (
           .filter((l) => l.startsWith("data:"))
           .map((l) => l.substring(5).trim());
 
-        if (dataLines.length === 0) continue;
+        if (dataLines.length === 0) {
+          // Maybe the data format is different – log it
+          if (block.trim()) {
+            console.log("[SSE] Non-data block:", JSON.stringify(block.trim()).slice(0, 300));
+          }
+          continue;
+        }
         const jsonStr = dataLines.join("");
 
         try {
           const payload = JSON.parse(jsonStr);
+
+          if (chunkCount <= 5) {
+            console.log("[SSE] Parsed payload:", JSON.stringify(payload).slice(0, 500));
+          }
 
           if (payload.status === "stream" && payload.data) {
             const readings: SensorLiveReading[] = [];
@@ -496,12 +524,16 @@ export const connectToSensorStream = async (
             );
 
             if (readings.length > 0) {
+              if (chunkCount <= 5) {
+                console.log("[SSE] Parsed readings:", readings.length, readings.map(r => `${r.tin}=${r.value}`).join(", "));
+              }
               onMessage(readings);
             }
+          } else {
+            console.log("[SSE] Payload not matched (status/data check):", Object.keys(payload), "status:", payload.status);
           }
         } catch (e) {
-          // Silently skip malformed JSON chunks – the next event will come
-          console.warn("SSE: skipped malformed event", e);
+          console.warn("[SSE] JSON parse failed for:", jsonStr.slice(0, 200), e);
         }
       }
     }
