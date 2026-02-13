@@ -46,6 +46,9 @@ function SensorsTopology({
               <feGaussianBlur stdDeviation="0.8" result="coloredBlur" />
               <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
+            <filter id="greenTint">
+              <feColorMatrix type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.84  0 0 0 0 0.38  0 0 0 1 0" />
+            </filter>
           </defs>
 
           {/* Lines from Endnode to active sensors only */}
@@ -69,17 +72,20 @@ function SensorsTopology({
           {/* Central Endnode */}
           <g>
             <circle cx={50} cy={50} r="10" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
-            <image href="/assets/Logos/End Node.png" x={38} y={38} width={24} height={24} preserveAspectRatio="xMidYMid meet" />
+            <image href="/assets/Logos/End Node.png" x={43} y={43} width={14} height={14} preserveAspectRatio="xMidYMid meet" filter="url(#greenTint)" />
           </g>
-          <text x={50} y={62} textAnchor="middle" fill={colors.text} fontSize="2.5" fontWeight="bold">{centralEndnode.displayName}</text>
-          <text x={50} y={65} textAnchor="middle" fill={colors.yellow} fontSize="2">{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} active</text>
+          <text x={50} y={63} textAnchor="middle" fill={colors.text} fontSize="3.5" fontWeight="bold">{centralEndnode.displayName}</text>
+          <text x={50} y={67} textAnchor="middle" fill={colors.yellow} fontSize="2.8">{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} active</text>
 
-          {/* Sensor Nodes — only active sensors are visible */}
+          {/* Sensor Nodes — only active sensors are visible, with logos */}
           {sensorPositions.map((sensorPos) => {
             const sensorData = connectedSensors.get(sensorPos.tin);
             const device = getDeviceForSensor(sensorPos.tin);
             const isActive = sensorData && Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
             if (!isActive || !sensorData) return null;
+
+            const r = 5.5; // sensor circle radius
+            const iconSize = 7; // logo size inside circle
 
             return (
               <g
@@ -87,12 +93,24 @@ function SensorsTopology({
                 className="cursor-pointer"
                 onClick={() => device && onSelectDevice(device)}
               >
-                <circle cx={sensorPos.x} cy={sensorPos.y} r="3.5" fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
-                <circle cx={sensorPos.x} cy={sensorPos.y} r="1.5" fill={colors.primary} />
-                <text x={sensorPos.x} y={sensorPos.y + 7} textAnchor="middle" fill={colors.yellow} fontSize="2" fontWeight="bold">
+                <circle cx={sensorPos.x} cy={sensorPos.y} r={r} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
+                {device?.icon ? (
+                  <image
+                    href={device.icon}
+                    x={sensorPos.x - iconSize / 2}
+                    y={sensorPos.y - iconSize / 2}
+                    width={iconSize}
+                    height={iconSize}
+                    preserveAspectRatio="xMidYMid meet"
+                    filter="url(#greenTint)"
+                  />
+                ) : (
+                  <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
+                )}
+                <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.yellow} fontSize="3" fontWeight="bold">
                   {sensorData.value.toFixed(1)}{sensorData.unit}
                 </text>
-                <text x={sensorPos.x} y={sensorPos.y + 9.5} textAnchor="middle" fill={colors.textMuted} fontSize="1.5">
+                <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.2">
                   {sensorData.displayName}
                 </text>
               </g>
