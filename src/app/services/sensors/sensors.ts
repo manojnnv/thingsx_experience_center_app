@@ -6,7 +6,7 @@
  */
 
 import { api } from "@/app/utils/api";
-import { sensorsDeviceTins, getSensorTins, DeviceConfig, categoryConfig, categoryToLogo, LOGOS_BASE } from "@/config/devices";
+import { sensorsDeviceTins, getSensorTins, categoryConfig, categoryToLogo, LOGOS_BASE } from "@/config/devices";
 import { toast } from "sonner";
 import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
@@ -343,330 +343,36 @@ export const getLatestReading = async (
   }
 };
 
-/**
- * Real-time sensor data response
- */
-export interface SensorLiveReading {
-  tin: string;
-  value: number;
-  unit: string;
-  timestamp: Date;
-  category: string;
-  displayName: string;
-  /** When metric is a color (e.g. Addressable RGB), hex string for display */
-  valueDisplay?: string;
-}
+// ─── Live Topology Polling ─────────────────────────────────────────────
 
 /**
- * Connect to SSE stream for live sensor data.
+ * Shape returned by POST /v1/device/latest_data
  *
- * Uses the Fetch API with ReadableStream to consume an SSE endpoint that
- * requires a POST body (list of TINs). The standard EventSource API only
- * supports GET, so we stream manually.
- *
- * Key points:
- * - Calls ensureAuth() before every connection attempt so the token is fresh.
- * - Sends Accept: text/event-stream and cache: no-cache for proper SSE
- *   behaviour in browsers and proxies.
- * - Parses the SSE wire format: blocks separated by blank lines, each
- *   containing one or more "data:" lines.
+ *   { "status": "success",
+ *     "data": { "TIN": { "metric": { "value": number, "timestamp": "..." } } } }
  */
-export const connectToSensorStream = async (
-  onMessage: (readings: SensorLiveReading[]) => void,
-  onError: (error: string) => void,
-  signal: AbortSignal
-): Promise<void> => {
-  const configuredTins = getSensorTins();
-  // Filter out load cells and RGBs as requested
-  const tinsToMonitor = configuredTins.filter((tin) => {
-    const config = sensorsDeviceTins.find((c) => c.tin === tin);
-    return (
-      config?.category !== "load_cell" &&
-      config?.category !== "addressable_rgb" &&
-      config?.category !== "led"
-    );
-  });
-
-  if (tinsToMonitor.length === 0) return;
-
-  // --- Ensure we have a valid access token before connecting ----------
-  const { ensureAuth } = await import("@/app/services/auth/auth");
-  const authed = await ensureAuth();
-  if (!authed) {
-    onError("NOT_AUTHENTICATED");
-    return;
-  }
-
-  const token = localStorage.getItem("access_token");
-  if (!token) {
-    onError("NOT_AUTHENTICATED");
-    return;
-  }
-
-  const API_BASE =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://tgx-app-api.dev.intellobots.com";
-
-  console.log("[SSE] Connecting with TINs:", tinsToMonitor);
-
-  try {
-    const response = await fetch(`${API_BASE}/v1/device/latest/live`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ tins: tinsToMonitor }),
-      signal,
-    });
-
-    console.log("[SSE] Response status:", response.status, response.statusText);
-    console.log("[SSE] Content-Type:", response.headers.get("content-type"));
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        localStorage.removeItem("access_token");
-        onError("NOT_AUTHENTICATED");
-      } else {
-        onError(`HTTP Error: ${response.status}`);
-      }
-      return;
-    }
-
-    if (!response.body) {
-      onError("No response body – streaming not supported");
-      return;
-    }
-
-    console.log("[SSE] Stream connected, reading data...");
-
-    // --- Read the stream --------------------------------------------------
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let chunkCount = 0;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        console.log("[SSE] Stream ended (done=true). Total chunks received:", chunkCount);
-        break;
-      }
-
-      chunkCount++;
-      const chunk = decoder.decode(value, { stream: true });
-
-      // Log first few chunks raw to see what the server sends
-      if (chunkCount <= 5) {
-        console.log(`[SSE] Raw chunk #${chunkCount}:`, JSON.stringify(chunk).slice(0, 500));
-      }
-
-      buffer += chunk;
-
-      // SSE events are separated by blank lines (\n\n).
-      // Split on that boundary, keeping the last (possibly incomplete) chunk.
-      const blocks = buffer.split("\n\n");
-      buffer = blocks.pop() || "";
-
-      for (const block of blocks) {
-        // Each block can have multiple "data:" lines; concatenate them.
-        const dataLines = block
-          .split("\n")
-          .filter((l) => l.startsWith("data:"))
-          .map((l) => l.substring(5).trim());
-
-        if (dataLines.length === 0) {
-          // Maybe the data format is different – log it
-          if (block.trim()) {
-            console.log("[SSE] Non-data block:", JSON.stringify(block.trim()).slice(0, 300));
-          }
-          continue;
-        }
-        const jsonStr = dataLines.join("");
-
-        try {
-          const payload = JSON.parse(jsonStr);
-
-          if (chunkCount <= 5) {
-            console.log("[SSE] Parsed payload:", JSON.stringify(payload).slice(0, 500));
-          }
-
-          if (payload.status === "stream" && payload.data) {
-            const readings: SensorLiveReading[] = [];
-
-            // Parse payload.data: { TIN: { metric: { value, timestamp } } }
-            Object.entries(payload.data).forEach(
-              ([tin, metrics]: [string, any]) => {
-                const config = sensorsDeviceTins.find((c) => c.tin === tin);
-                const category = config?.category || "sensor";
-                const categoryInfo = categoryConfig[category] || {
-                  label: "Sensor",
-                  unit: "",
-                  icon: "sensor",
-                };
-
-                Object.entries(metrics).forEach(
-                  ([, metricData]: [string, any]) => {
-                    if (metricData?.value === undefined) return;
-
-                    readings.push({
-                      tin,
-                      value: Number(metricData.value),
-                      unit: categoryInfo.unit,
-                      timestamp: new Date(metricData.timestamp),
-                      category,
-                      displayName: config?.displayName || tin,
-                    });
-                  }
-                );
-              }
-            );
-
-            if (readings.length > 0) {
-              if (chunkCount <= 5) {
-                console.log("[SSE] Parsed readings:", readings.length, readings.map(r => `${r.tin}=${r.value}`).join(", "));
-              }
-              onMessage(readings);
-            }
-          } else {
-            console.log("[SSE] Payload not matched (status/data check):", Object.keys(payload), "status:", payload.status);
-          }
-        } catch (e) {
-          console.warn("[SSE] JSON parse failed for:", jsonStr.slice(0, 200), e);
-        }
-      }
-    }
-  } catch (err: any) {
-    if (err?.name === "AbortError") return; // intentional teardown
-    onError(err?.message || String(err));
-  }
-};
+export type LatestDataPayload = Record<
+  string, // TIN
+  Record<string, { value: number; timestamp: string }>
+>;
 
 /**
- * Poll sensor data for all configured TINs
- * ... existing implementation ...
+ * Fetch the latest live reading for a set of TINs.
+ * Uses POST /v1/device/latest_data (body: { tin: "TIN1,TIN2,..." }).
  */
-export const pollSensorData = async (
-  maxAgeMs?: number
-): Promise<ServiceResult<SensorLiveReading[]>> => {
+export const fetchLatestSensorData = async (
+  tins: string[]
+): Promise<ServiceResult<LatestDataPayload>> => {
   try {
-    const configuredTins = getSensorTins();
-
-    if (configuredTins.length === 0) {
-      return ok([]);
-    }
-
-    // Check if we have auth tokens before making the request
-    const accessToken = localStorage.getItem("access_token");
-    if (!accessToken) {
-      return fail("NOT_AUTHENTICATED");
-    }
-
-    const end = new Date();
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const metricsResult = await fetchDeviceMetrics(
-      configuredTins,
-      start.toISOString(),
-      end.toISOString()
-    );
-    if (metricsResult.error) {
-      return fail(metricsResult.error);
-    }
-    const metrics = metricsResult.data || [];
-    const readings: SensorLiveReading[] = [];
-
-    const byTin = new Map<string, MetricRecord[]>();
-    metrics.forEach((entry) => {
-      const tin = entry.Tin;
-      if (!tin) return;
-      const list = byTin.get(tin) || [];
-      list.push(entry);
-      byTin.set(tin, list);
+    const resp = await api.post("/v1/device/latest_data", {
+      tin: tins.join(","),
     });
-
-    const now = Date.now();
-    byTin.forEach((entries, tin) => {
-      const config = sensorsDeviceTins.find((c) => c.tin === tin);
-      const category = config?.category || normalizeCategoryKey(entries[0]?.["Device Type"]) || "sensor";
-      const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
-      const preferColor = category === "led" || category === "addressable_rgb";
-      const colorEntry = preferColor ? entries.find((e) => isColorMetric(e.Metric, e.Value)) : null;
-      const latestByTime = entries.reduce((a, b) =>
-        new Date((b.Time || 0) as string).getTime() >= new Date((a.Time || 0) as string).getTime() ? b : a
-      );
-      const entry = colorEntry || latestByTime;
-      const timestamp = new Date(entry.Time || new Date().toISOString());
-      if (maxAgeMs && now - timestamp.getTime() > maxAgeMs) {
-        return;
-      }
-      const isColor = isColorMetric(entry.Metric, entry.Value);
-      const parsed = parseMetricValue(entry.Value);
-      const value = parsed.value ?? 0;
-      if (!isColor && parsed.value === null) return;
-      readings.push({
-        tin,
-        value,
-        unit: isColor ? "" : (parsed.unit || categoryInfo.unit),
-        timestamp,
-        category,
-        displayName: config?.displayName || entry["Device Name"] || tin,
-        ...(isColor && entry.Value?.trim() && { valueDisplay: entry.Value.trim() }),
-      });
-    });
-
-    return ok(readings);
-  } catch (error: unknown) {
-    // Handle specific error types
-    const axiosError = error as { response?: { status?: number } };
-    if (axiosError?.response?.status === 401) {
-      return fail("NOT_AUTHENTICATED");
+    if (resp?.data?.status === "success" && resp.data.data) {
+      return ok(resp.data.data as LatestDataPayload);
     }
-    if (axiosError?.response?.status === 403) {
-      return fail("FORBIDDEN");
-    }
-    // For other errors, return generic error
-    return fail("API_ERROR");
-  }
-};
-
-/**
- * Poll dashboard sensor metrics (alternative endpoint)
- * This gets all sensor readings for the site
- */
-export const pollDashboardSensorMetrics = async (): Promise<ServiceResult<SensorLiveReading[]>> => {
-  try {
-    const resp = await api.post("/v1/dashboard/sensor-readings/metrics", {
-      org_id: localStorage.getItem("org_id"),
-      site_id: localStorage.getItem("site_id"),
-    });
-
-    const data = resp?.data?.data || [];
-    const configuredTins = getSensorTins();
-    const readings: SensorLiveReading[] = [];
-
-    // Filter to only configured TINs
-    data.forEach((item: { tin: string; value: number; timestamp: string; unit?: string }) => {
-      if (configuredTins.includes(item.tin)) {
-        const config = sensorsDeviceTins.find((c) => c.tin === item.tin);
-        const category = config?.category || "sensor";
-        const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
-
-        readings.push({
-          tin: item.tin,
-          value: item.value,
-          unit: item.unit || categoryInfo.unit,
-          timestamp: new Date(item.timestamp),
-          category,
-          displayName: config?.displayName || item.tin,
-        });
-      }
-    });
-
-    return ok(readings);
+    return fail(resp?.data?.message || "Unexpected response from latest_data");
   } catch (error) {
-    console.error("Error polling dashboard metrics:", error);
-    return fail(getErrorMessage(error, "Failed to poll dashboard metrics"));
+    return fail(getErrorMessage(error, "Failed to fetch latest sensor data"));
   }
 };
+
