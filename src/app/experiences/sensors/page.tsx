@@ -36,8 +36,7 @@ import AppSheet from "@/app/component/app-sheet/AppSheet";
 import type { DisplayDevice, SensorLiveData, EPDFieldValues } from "@/app/component/app-experience/types";
 
 // Constants
-const SENSOR_TIMEOUT_MS = 10000; // 10 seconds
-const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds
+const SENSOR_FRESHNESS_MS = 30000; // Only accept readings with timestamps within the last 30 seconds
 const TABS = {
   grid: "Component Matrix",
   topology: "Live Topology",
@@ -230,6 +229,15 @@ function SensorsPageContent() {
     setEpdValues(initialValues);
   }, []);
 
+  // Snapshot of last committed values — used to detect meaningful changes
+  // without reading React state. Lives outside React so SSE callbacks can
+  // compare cheaply without triggering renders.
+  const lastCommittedRef = useRef<Map<string, { value: number; tin: string }>>(new Map());
+  // Pending flush handle — we schedule ONE flush per new-data burst
+  const flushHandleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Buffer accumulating the latest reading per TIN between flushes
+  const sseBufferRef = useRef<Map<string, SensorLiveReading>>(new Map());
+
   // SSE Connection and Data Handling
   useEffect(() => {
     if (activeTab !== TABS.topology || showVideo || !isAuthenticated || authLoading) {
@@ -239,64 +247,108 @@ function SensorsPageContent() {
     const abortController = new AbortController();
     let retryTimeout: NodeJS.Timeout;
 
+    // ---- flush: commit buffer to React state (called at most once per burst)
+    const flush = () => {
+      flushHandleRef.current = null;
+      const buffer = sseBufferRef.current;
+      if (buffer.size === 0) return;
+
+      // Determine which readings represent a meaningful change
+      const meaningful: SensorLiveReading[] = [];
+      buffer.forEach((reading, tin) => {
+        const prev = lastCommittedRef.current.get(tin);
+        // Accept if: new TIN, or value changed (rounded to 1 decimal)
+        if (!prev || prev.value.toFixed(1) !== reading.value.toFixed(1)) {
+          meaningful.push(reading);
+        }
+      });
+      sseBufferRef.current = new Map(); // clear buffer regardless
+
+      if (meaningful.length === 0) return; // nothing meaningful changed
+
+      // Commit to snapshot
+      meaningful.forEach((r) =>
+        lastCommittedRef.current.set(r.tin, { value: r.value, tin: r.tin })
+      );
+
+      setLastPollTime(new Date());
+
+      // Update connected sensors — sensors are NEVER removed, only added/updated
+      setConnectedSensors((prev) => {
+        const updated = new Map(prev);
+        meaningful.forEach((reading) => {
+          const existing = updated.get(reading.tin);
+          const history = existing?.history || [];
+          updated.set(reading.tin, {
+            tin: reading.tin,
+            value: reading.value,
+            unit: reading.unit,
+            displayName: reading.displayName,
+            category: reading.category,
+            lastReceivedAt: reading.timestamp,
+            history: [...history, reading.value].slice(-30),
+            ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
+          });
+        });
+        return updated;
+      });
+
+      // Update devices status
+      setDevices((prev) => {
+        let changed = false;
+        const next = prev.map((device) => {
+          const reading = meaningful.find((r) => r.tin === device.tin);
+          if (reading) {
+            changed = true;
+            return {
+              ...device,
+              status: "online" as const,
+              lastReading: reading.value,
+              unit: reading.unit || device.unit,
+              lastReceivedAt: reading.timestamp,
+              ...(reading.valueDisplay && { lastReadingDisplay: reading.valueDisplay }),
+            };
+          }
+          return device;
+        });
+        return changed ? next : prev;
+      });
+    };
+
+    // ---- SSE connection
     const connect = async () => {
-      setIsPolling(true); // Acts as "Connecting" status
+      setIsPolling(true);
 
       await connectToSensorStream(
         (readings) => {
           setPollingError(null);
-          setLastPollTime(new Date());
 
-          // Batch update connected sensors
-          setConnectedSensors((prev) => {
-            const updated = new Map(prev);
+          // Only accept readings with fresh timestamps
+          const now = Date.now();
+          const freshReadings = readings.filter(
+            (r) => now - r.timestamp.getTime() < SENSOR_FRESHNESS_MS
+          );
+          if (freshReadings.length === 0) return;
 
-            readings.forEach((reading) => {
-              const existing = updated.get(reading.tin);
-              const history = existing?.history || [];
-
-              // Only update if timestamp is newer or same (avoid out of order)
-              if (existing && reading.timestamp < existing.lastReceivedAt) {
-                return;
-              }
-
-              updated.set(reading.tin, {
-                tin: reading.tin,
-                value: reading.value,
-                unit: reading.unit,
-                displayName: reading.displayName,
-                category: reading.category,
-                lastReceivedAt: reading.timestamp,
-                history: [...history, reading.value].slice(-30),
-                ...(reading.valueDisplay && { valueDisplay: reading.valueDisplay }),
-              });
-            });
-            return updated;
+          // Buffer latest per TIN
+          freshReadings.forEach((reading) => {
+            const existing = sseBufferRef.current.get(reading.tin);
+            if (!existing || reading.timestamp >= existing.timestamp) {
+              sseBufferRef.current.set(reading.tin, reading);
+            }
           });
 
-          // Update devices status
-          setDevices((prev) =>
-            prev.map((device) => {
-              const reading = readings.find((r) => r.tin === device.tin);
-              if (reading) {
-                return {
-                  ...device,
-                  status: "online",
-                  lastReading: reading.value,
-                  unit: reading.unit || device.unit,
-                  lastReceivedAt: reading.timestamp,
-                  ...(reading.valueDisplay && { lastReadingDisplay: reading.valueDisplay }),
-                };
-              }
-              return device;
-            })
-          );
+          // Schedule a single flush 500ms from now (debounced).
+          // This lets a burst of SSE events within the same ~500ms window
+          // collapse into one React render.
+          if (!flushHandleRef.current) {
+            flushHandleRef.current = setTimeout(flush, 500);
+          }
         },
         (err) => {
           if (err !== "AbortError") {
             console.error("SSE Error:", err);
             setPollingError("Connection lost. Retrying...");
-            // Retry after 5s
             retryTimeout = setTimeout(connect, 5000);
           }
         },
@@ -306,34 +358,13 @@ function SensorsPageContent() {
 
     connect();
 
-    // Separate cleanup interval for stale sensors
-    const cleanupInterval = setInterval(() => {
-      const now = new Date();
-      const disconnectedTins: string[] = [];
-      setConnectedSensors((prev) => {
-        const updated = new Map(prev);
-        let hasChanges = false;
-        prev.forEach((sensor, tin) => {
-          if (now.getTime() - sensor.lastReceivedAt.getTime() > SENSOR_TIMEOUT_MS) {
-            updated.delete(tin);
-            disconnectedTins.push(tin);
-            hasChanges = true;
-          }
-        });
-        return hasChanges ? updated : prev;
-      });
-
-      if (disconnectedTins.length > 0) {
-        setDevices(prev => prev.map(d =>
-          disconnectedTins.includes(d.tin) ? { ...d, status: 'offline' } : d
-        ));
-      }
-    }, 1000);
+    // No cleanup interval — sensors persist with their last known value.
 
     return () => {
       abortController.abort();
       clearTimeout(retryTimeout);
-      clearInterval(cleanupInterval);
+      if (flushHandleRef.current) clearTimeout(flushHandleRef.current);
+      sseBufferRef.current = new Map();
       setIsPolling(false);
     };
   }, [activeTab, showVideo, isAuthenticated, authLoading]);
@@ -412,7 +443,7 @@ function SensorsPageContent() {
               connectedSensors={connectedSensors}
               getDeviceForSensor={getDeviceForSensor}
               onSelectDevice={handleSelectDevice}
-              sensorTimeoutMs={SENSOR_TIMEOUT_MS}
+
               centralEndnode={centralEndnode}
               categoryConfig={categoryConfig}
             />

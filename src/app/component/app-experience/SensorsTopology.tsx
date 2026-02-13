@@ -9,7 +9,6 @@ function SensorsTopology({
   connectedSensors,
   getDeviceForSensor,
   onSelectDevice,
-  sensorTimeoutMs,
   centralEndnode,
   categoryConfig,
 }: {
@@ -17,7 +16,6 @@ function SensorsTopology({
   connectedSensors: Map<string, SensorLiveData>;
   getDeviceForSensor: (tin: string) => DisplayDevice | undefined;
   onSelectDevice: (device: DisplayDevice) => void;
-  sensorTimeoutMs: number;
   centralEndnode: { displayName: string };
   categoryConfig: Record<string, { label?: string }>;
 }) {
@@ -26,7 +24,6 @@ function SensorsTopology({
   // Calculate fixed positions based on ALL configured devices (Stable Slots)
   // This ensures the layout doesn't shift when a sensor goes offline
   const sensorPositions = devices.map((device, i) => {
-    // Distribute evenly around the circle
     const angle = (i / Math.max(devices.length, 1)) * 2 * Math.PI - Math.PI / 2;
     return {
       tin: device.tin,
@@ -34,6 +31,8 @@ function SensorsTopology({
       y: 50 + 35 * Math.sin(angle),
     };
   });
+
+  const STALE_THRESHOLD_MS = 15000; // 15s — sensor is "stale" if no data in this window
 
   return (
     <div className="space-y-6">
@@ -47,25 +46,27 @@ function SensorsTopology({
             </filter>
           </defs>
 
-          {/* Lines from Endnode to Sensors */}
+          {/* Lines from Endnode to ALL sensors that ever sent data */}
           {sensorPositions.map((sensorPos) => {
-            // Only render line if sensor is connected
-            if (!connectedSensors.has(sensorPos.tin)) return null;
+            const sensorData = connectedSensors.get(sensorPos.tin);
+            if (!sensorData) return null; // never received data → don't draw
+
+            const isStale = Date.now() - sensorData.lastReceivedAt.getTime() > STALE_THRESHOLD_MS;
 
             return (
               <line
                 key={`line-${sensorPos.tin}`}
                 x1={50} y1={50}
                 x2={sensorPos.x} y2={sensorPos.y}
-                stroke={colors.yellow}
+                stroke={isStale ? colors.textMuted : colors.yellow}
                 strokeWidth="0.4"
-                opacity={0.5}
-                className="transition-all duration-500 ease-in-out"
+                opacity={isStale ? 0.2 : 0.5}
+                strokeDasharray={isStale ? "1 1" : undefined}
               />
             );
           })}
 
-          {/* Central Endnode - use End Node.png icon */}
+          {/* Central Endnode */}
           <g>
             <circle cx={50} cy={50} r="10" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
             <image href="/assets/Logos/End Node.png" x={38} y={38} width={24} height={24} preserveAspectRatio="xMidYMid meet" />
@@ -73,28 +74,29 @@ function SensorsTopology({
           <text x={50} y={62} textAnchor="middle" fill={colors.text} fontSize="2.5" fontWeight="bold">{centralEndnode.displayName}</text>
           <text x={50} y={65} textAnchor="middle" fill={colors.yellow} fontSize="2">{connectedSensorsList.length} sensors connected</text>
 
-          {/* Sensor Nodes */}
+          {/* Sensor Nodes — always rendered once they have data, stale ones are dimmed */}
           {sensorPositions.map((sensorPos) => {
             const sensorData = connectedSensors.get(sensorPos.tin);
             const device = getDeviceForSensor(sensorPos.tin);
 
-            // "Stable Invisible Slots": If offline, we just don't render it.
-            // The position (x,y) is still reserved for it.
+            // Only skip sensors that have NEVER sent data
             if (!sensorData) return null;
+
+            const isStale = Date.now() - sensorData.lastReceivedAt.getTime() > STALE_THRESHOLD_MS;
 
             return (
               <g
                 key={sensorPos.tin}
-                className="cursor-pointer transition-all duration-500 ease-in-out"
+                className="cursor-pointer"
+                opacity={isStale ? 0.4 : 1}
                 onClick={() => device && onSelectDevice(device)}
-                style={{ transformOrigin: `${sensorPos.x}px ${sensorPos.y}px` }}
               >
-                <circle cx={sensorPos.x} cy={sensorPos.y} r="3.5" fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" className="transition-all duration-500" />
-                <circle cx={sensorPos.x} cy={sensorPos.y} r="1.5" fill={colors.primary} className="transition-all duration-500" />
-                <text x={sensorPos.x} y={sensorPos.y + 7} textAnchor="middle" fill={colors.yellow} fontSize="2" fontWeight="bold" className="transition-all duration-500">
+                <circle cx={sensorPos.x} cy={sensorPos.y} r="3.5" fill={colors.backgroundCard} stroke={isStale ? colors.textMuted : colors.primary} strokeWidth="0.4" />
+                <circle cx={sensorPos.x} cy={sensorPos.y} r="1.5" fill={isStale ? colors.textMuted : colors.primary} />
+                <text x={sensorPos.x} y={sensorPos.y + 7} textAnchor="middle" fill={isStale ? colors.textMuted : colors.yellow} fontSize="2" fontWeight="bold">
                   {sensorData.value.toFixed(1)}{sensorData.unit}
                 </text>
-                <text x={sensorPos.x} y={sensorPos.y + 9.5} textAnchor="middle" fill={colors.textMuted} fontSize="1.5" className="transition-all duration-500">
+                <text x={sensorPos.x} y={sensorPos.y + 9.5} textAnchor="middle" fill={colors.textMuted} fontSize="1.5">
                   {sensorData.displayName}
                 </text>
               </g>
@@ -108,11 +110,11 @@ function SensorsTopology({
 
         {/* Legend */}
         <div className="absolute bottom-4 left-4 p-3 rounded-lg" style={{ backgroundColor: `${colors.background}ee` }}>
-          <p className="text-xs font-semibold mb-2" style={{ color: colors.yellow }}>Dynamic Topology</p>
+          <p className="text-xs font-semibold mb-2" style={{ color: colors.yellow }}>Live Topology</p>
           <div className="flex flex-col gap-2 text-xs" style={{ color: colors.textMuted }}>
             <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2" style={{ borderColor: colors.yellow, backgroundColor: colors.backgroundCard }} /> Endnode</span>
-            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} /> Connected sensor</span>
-            <span className="flex items-center gap-2 text-[10px]" style={{ color: colors.textFaint }}>Timeout: {sensorTimeoutMs / 1000}s</span>
+            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} /> Active sensor</span>
+            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.textMuted, opacity: 0.4 }} /> Stale (last data &gt;15s)</span>
           </div>
         </div>
         <div className="absolute top-4 right-4 text-xs" style={{ color: colors.textMuted }}>Click a sensor to view details</div>
