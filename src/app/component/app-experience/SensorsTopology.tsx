@@ -37,9 +37,9 @@ function SensorsTopology({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-2 h-full overflow-hidden">
       {/* Topology SVG */}
-      <div className="relative w-full h-[500px] rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
+      <div className="relative w-full flex-[3] min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
         <svg viewBox="0 0 100 100" className="w-full h-full">
           <defs>
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -112,27 +112,27 @@ function SensorsTopology({
       </div>
 
       {/* Real-time Data Table */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
-        <div className="p-4 border-b" style={{ borderColor: colors.border }}>
-          <h3 className="text-lg font-bold" style={{ color: colors.text }}>Connected Sensors - Real-time Data</h3>
-          <p className="text-sm" style={{ color: colors.textMuted }}>{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} actively transmitting</p>
+      <div className="rounded-2xl overflow-hidden flex-[2] min-h-0 flex flex-col" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
+        <div className="p-3 border-b flex-none" style={{ borderColor: colors.border }}>
+          <h3 className="text-sm font-bold" style={{ color: colors.text }}>Connected Sensors - Real-time Data</h3>
+          <p className="text-xs" style={{ color: colors.textMuted }}>{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} actively transmitting</p>
         </div>
 
         {activeSensorCount === 0 ? (
-          <div className="p-8 text-center" style={{ color: colors.textMuted }}>
+          <div className="p-4 text-center flex-1" style={{ color: colors.textMuted }}>
             <p>No sensors are currently transmitting data.</p>
-            <p className="text-sm mt-2">Sensors will appear here when they send data.</p>
+            <p className="text-xs mt-1">Sensors will appear here when they send data.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto flex-1 min-h-0">
             <table className="w-full">
               <thead>
                 <tr style={{ backgroundColor: colors.background }}>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Sensor</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Last Data</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Current Value</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Trend (30s)</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Sensor</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Type</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Last Data</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Current Value</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Trend (30s)</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,20 +146,20 @@ function SensorsTopology({
 
                   return (
                     <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div>
                           <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
                           <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
-                      <td className="px-4 py-3"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
-                      <td className="px-4 py-3">
-                        <span className="text-lg font-bold" style={{ color: colors.yellow }}>
+                      <td className="px-3 py-2"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
+                      <td className="px-3 py-2"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
+                      <td className="px-3 py-2">
+                        <span className="text-base font-bold" style={{ color: colors.yellow }}>
                           {sensor.value.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <div className="h-6 w-20 flex items-end gap-px">
                             {history.slice(-15).map((val, i) => {

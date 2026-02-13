@@ -381,7 +381,7 @@ function SensorsPageContent() {
 
   return (
     <div
-      className="min-h-screen text-white relative"
+      className="h-screen text-white relative flex flex-col overflow-hidden"
       style={{ backgroundColor: colors.background }}
     >
       <ThemedToaster accentColor={colors.sensorAccent} />
@@ -389,7 +389,7 @@ function SensorsPageContent() {
       <VideoIntro show={showVideo} onSkip={skipVideo} />
 
       {/* Main Content */}
-      <div className={showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}>
+      <div className={`flex flex-col flex-1 min-h-0 ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}`}>
         <SensorsHeader
           tabs={TABS_ARRAY}
           activeTab={activeTab}
@@ -401,7 +401,7 @@ function SensorsPageContent() {
         />
 
         {/* Content Area */}
-        <main className="px-8 py-6">
+        <main className="px-8 py-2 flex-1 min-h-0">
           <SensorsLoading loading={loading} />
 
           {/* Component Matrix Grid */}
@@ -418,15 +418,16 @@ function SensorsPageContent() {
 
           {/* Dynamic Live Topology */}
           {!loading && activeTab === TABS.topology && (
-            <SensorsTopology
-              devices={devices}
-              connectedSensors={connectedSensors}
-              getDeviceForSensor={getDeviceForSensor}
-              onSelectDevice={handleSelectDevice}
-
-              centralEndnode={centralEndnode}
-              categoryConfig={categoryConfig}
-            />
+            <div className="h-full">
+              <SensorsTopology
+                devices={devices}
+                connectedSensors={connectedSensors}
+                getDeviceForSensor={getDeviceForSensor}
+                onSelectDevice={handleSelectDevice}
+                centralEndnode={centralEndnode}
+                categoryConfig={categoryConfig}
+              />
+            </div>
           )}
 
           {/* EPD Control */}

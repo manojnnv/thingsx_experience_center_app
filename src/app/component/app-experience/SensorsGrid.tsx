@@ -1,10 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { colors } from "@/config/theme";
 import type { DisplayDevice, SensorLiveData } from "./types";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import SensorsSelectedDevicePanel from "./SensorsSelectedDevicePanel";
+
+const TILES_PER_PAGE = 16;
 
 function SensorsGrid({
   devices,
@@ -21,10 +23,21 @@ function SensorsGrid({
   onClose: () => void;
   centralEndnode: { displayName: string };
 }) {
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // Reset to page 0 when devices change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [devices.length]);
+
+  const totalPages = Math.max(1, Math.ceil(devices.length / TILES_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const pageDevices = devices.slice(safePage * TILES_PER_PAGE, safePage * TILES_PER_PAGE + TILES_PER_PAGE);
+
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {devices.map((device) => {
+      <div className="grid grid-cols-4 gap-4">
+        {pageDevices.map((device) => {
           const liveData = connectedSensors.get(device.tin);
           const colorDisplay = liveData?.valueDisplay ?? device.lastReadingDisplay;
           const isColorTile = (device.category === "led" || device.category === "addressable_rgb") && colorDisplay && /^#([0-9A-Fa-f]{3}){1,2}$/.test(colorDisplay);
@@ -99,6 +112,47 @@ function SensorsGrid({
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+            style={{ color: colors.textMuted, border: `1px solid ${colors.border}` }}
+          >
+            ← Previous
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i)}
+                className="w-8 h-8 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: i === safePage ? colors.yellow : "transparent",
+                  color: i === safePage ? colors.background : colors.textMuted,
+                  border: i === safePage ? "none" : `1px solid ${colors.border}`,
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={safePage === totalPages - 1}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+            style={{ color: colors.textMuted, border: `1px solid ${colors.border}` }}
+          >
+            Next →
+          </button>
+        </div>
+      )}
+
       <AppSheet
         open={Boolean(selectedDevice)}
         onOpenChange={(open) => {
