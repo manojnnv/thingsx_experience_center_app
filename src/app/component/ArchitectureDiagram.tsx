@@ -5,7 +5,7 @@ import { colors } from "@/config/theme";
 export function ArchitectureDiagram() {
   return (
     <div className="relative w-full h-full flex justify-center">
-      <div className="relative w-full max-w-6xl flex items-center">
+      <div className="relative w-full max-w-6xl flex items-center -ml-45">
         <svg
           viewBox="0 0 650 560"
           className="w-full max-w-4xl h-full mx-auto"
