@@ -43,7 +43,7 @@ function AppSelect({
         </label>
       )}
       <select
-        value={value || ""}
+        value={value ?? ""}
         onChange={handleChange}
         disabled={disabled}
         className="px-3 py-2 rounded-lg text-sm outline-none transition-all focus:ring-2 cursor-pointer"
@@ -51,13 +51,18 @@ function AppSelect({
           backgroundColor: colors.backgroundCard,
           border: `1px solid ${colors.border}`,
           color: colors.text,
+          colorScheme: "dark",
         }}
       >
-        <option value="" disabled>
+        <option value="" disabled style={{ backgroundColor: colors.backgroundCard, color: colors.textMuted }}>
           {placeholder}
         </option>
         {options?.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option
+            key={option.value}
+            value={option.value}
+            style={{ backgroundColor: colors.backgroundCard, color: colors.text }}
+          >
             {option.label}
           </option>
         ))}

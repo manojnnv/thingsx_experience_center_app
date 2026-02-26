@@ -19,64 +19,46 @@ interface WarehouseIndoorPositioningTabProps {
 function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioningTabProps) {
   const [loading, setLoading] = useState(false);
   const { editor, onReady } = useFabricJSEditor();
-  const image = "/assets/new_office_warehouse.png";
+  const image = "/assets/Warehouse Layout Preview.svg";
   const canvasRef = useRef<HTMLDivElement>(null);
   const [allAsset, setAllAsset] = useState<Asset[]>([]);
   const siteID = useSelector((state: any) => state.orgDetails.siteId);
 
-  // Canonical physical floor dimensions in centimeters
-  const PHYS_FLOOR_WIDTH_CM = 523; // width in cm
-  const PHYS_FLOOR_HEIGHT_CM = 427; // height in cm
-  // Hard-coded vertical offset (pixels) applied to every plotted point's Y
-  // Change this value to shift all live markers up/down on the canvas.
-  const HARD_Y_OFFSET_PX = 100;
+  // Physical floor dimensions in centimeters
+  const PHYS_FLOOR_WIDTH_CM = 523;
+  const PHYS_FLOOR_HEIGHT_CM = 427;
 
-  const [floorOriginalSize, setFloorOriginalSize] = useState<{
-    w: number;
-    h: number;
-  } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [liveTracking, setLiveTracking] = useState(false);
-  const [assetId, setAssetId] = useState<number>(7);
   const [selectAsset, setSelectedAsset] = useState<string>();
-  console.log(selectAsset);
 
   // refs for SSE and marker
-  const liveSourceRef = useRef<EventSource | null>(null);
-  // support multiple markers keyed by asset id
+  const liveSourceRef = useRef<{ close: () => void } | null>(null);
   const liveMarkersRef = useRef<Record<string, fabric.Object>>({});
 
   // SSE reconnect backoff state
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
-  const onSelcteAsset = (asset: string | undefined) => {
-    // console.log(asset);
+  const onSelectAsset = (asset: string | undefined) => {
     if (asset) {
-      setSelectedAsset(asset); // wrap single value in array
+      setSelectedAsset(asset);
     }
   };
 
-  // URL base for SSE - change if your SSE path differs
   const SSE_URL_BASE =
     "https://tgx-app-api.dev.intellobots.com/v1/asset/live-tracking";
 
-  // Helper to parse incoming payload robustly
   const parseSSEData = (data: any) => {
-    // many APIs wrap the useful payload under .data or .payload etc
     try {
       if (!data) return null;
-      // If the server already sends JSON object, keep it
       if (typeof data === "object") return data;
-      // If it's a string, try parse
       return JSON.parse(data);
     } catch (e) {
-      // fallback - return raw
       return data;
     }
   };
 
-  // Dotted grid background (reused from other dashboard pages)
   const setDottedGridBackground = () => {
     if (!editor) return;
 
@@ -103,30 +85,24 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     editor.canvas.requestRenderAll();
   };
 
-  // Update or create live marker on canvas.
+  // Top-left origin coordinate mapping:
+  //   x: 0 to 523 maps to left → left + displayW
+  //   y: 0 to -427 maps to top → top + displayH (negative values go DOWN)
   const updateLiveMarker = (raw: any) => {
     if (!editor?.canvas) return;
-    const { canvas } = editor;
-    try {
-      // Accept either a single object or an array of asset objects
-      const items = Array.isArray(raw) ? raw : [raw];
+    const canvas = editor.canvas;
 
-      // find the layout image on canvas (we stored isLayout flag earlier)
-      const floor = canvas
-        .getObjects()
-        .find((o: any) => (o as any).isLayout) as any;
-      if (!floor) return; // can't position without layout image
+    try {
+      const items = Array.isArray(raw) ? raw : [raw];
+      const floor = canvas.getObjects().find((o: any) => o.isLayout) as any;
+      if (!floor) return;
 
       const scale = (floor.scaleX || 1) as number;
       const left = (floor.left ?? 0) as number;
       const top = (floor.top ?? 0) as number;
       const origW = (floor as any).__originalWidth || floor.width || 0;
-      const origH = (floor as any).__originalHeight || floor.height || 0;
-      // physical dims stored on image (fallback to canonical constants)
-      const physW = (floor as any).__physWidthCm || PHYS_FLOOR_WIDTH_CM;
-      const physH = (floor as any).__physHeightCm || PHYS_FLOOR_HEIGHT_CM;
       const displayW = origW * scale;
-      const displayH = origH * scale;
+      const displayH = ((floor as any).__originalHeight || floor.height || 0) * scale;
 
       items.forEach((rawItem: any) => {
         const d = rawItem?.data ?? rawItem ?? {};
@@ -138,52 +114,17 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
           d.id ??
           Math.random()
         );
+
         const rawX =
-          Number(d.x ?? d.img_x ?? d.x_px ?? d.imgPx ?? d.longitude ?? 0) || 0;
+          parseFloat(d.x ?? d.img_x ?? d.x_px ?? d.imgPx ?? d.longitude ?? 0) || 0;
         const rawY =
-          Number(d.y ?? d.img_y ?? d.y_px ?? d.imgPy ?? d.latitude ?? 0) || 0;
+          parseFloat(d.y ?? d.img_y ?? d.y_px ?? d.imgPy ?? d.latitude ?? 0) || 0;
 
-        // Map incoming coordinates (assumed centimeters relative to the
-        // physical floor size) to the displayed image rectangle. If the
-        // payload is actually in pixels, fallback mapping will be used.
-        let dispX = left;
-        let dispY = top;
+        const dispX = left + (rawX / PHYS_FLOOR_WIDTH_CM) * displayW;
+        // y is negative going down: convert -y to positive distance from top
+        const positiveY = -rawY;
+        const dispY = top + (positiveY / PHYS_FLOOR_HEIGHT_CM) * displayH;
 
-        if (physW > 0 && physH > 0) {
-          // Support several common Y conventions:
-          // 1) Center-origin coordinates (fourth-quadrant): rawY in [-physH/2..physH/2]
-          //    map by shifting origin to image top: adjY = physH/2 + rawY
-          // 2) Bottom-referenced negative Y: rawY < 0 and magnitude > physH/2
-          //    map by interpreting negative as distance above bottom: adjY = physH + rawY
-          // 3) Default: rawY already top-based (0..physH)
-          let adjY = rawY;
-          if (rawY >= -physH / 2 && rawY <= physH / 2) {
-            // center-origin (common for Cartesian coordinates)
-            adjY = physH / 2 + rawY;
-          } else if (rawY < 0) {
-            // bottom-referenced negative value
-            adjY = Math.max(0, physH + rawY);
-          }
-          dispX = left + (rawX / physW) * displayW;
-          dispY = top + (adjY / physH) * displayH;
-        } else {
-          // fallback: treat as image pixels
-          // If rawY is negative in pixels, treat as measured from bottom
-          let adjYpx = rawY;
-          if (rawY >= -origH / 2 && rawY <= origH / 2) {
-            // center-origin in pixels
-            adjYpx = origH / 2 + rawY;
-          } else if (rawY < 0) {
-            adjYpx = Math.max(0, origH + rawY);
-          }
-          dispX = left + rawX * scale;
-          dispY = top + adjYpx * scale;
-        }
-
-        // apply hard-coded vertical offset (pixels) to every plotted point
-        dispY += HARD_Y_OFFSET_PX;
-
-        // clamp to image display area so markers remain inside the floorplan
         const clampedX = Math.max(left, Math.min(left + displayW, dispX));
         const clampedY = Math.max(top, Math.min(top + displayH, dispY));
 
@@ -193,7 +134,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
             left: clampedX,
             top: clampedY,
             radius: 8,
-            fill: "rgba(0,122,255,0.95)",
+            fill: "rgba(255, 0, 0, 0.95)",
             stroke: "#fff",
             strokeWidth: 2,
             originX: "center",
@@ -204,55 +145,51 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
           (marker as any).assetId = assetIdVal;
           canvas.add(marker);
           liveMarkersRef.current[assetIdVal] = marker;
+
+          const label = new fabric.Text(
+            `${rawX.toFixed(0)},${rawY.toFixed(0)}`,
+            {
+              left: clampedX + 15,
+              top: clampedY - 10,
+              fontSize: 12,
+              fill: "#000",
+              backgroundColor: "rgba(255,255,255,0.7)",
+              selectable: false,
+              evented: false,
+            }
+          );
+          (label as any).isCoordLabel = true;
+          canvas.add(label);
           return;
         }
 
-        // Animate existing marker to new position
         try {
-          const marker = existing as fabric.Object & {
-            left: number;
-            top: number;
-          };
-          marker.animate(
-            { left: clampedX },
-            {
-              duration: 300,
-              onChange: canvas.requestRenderAll.bind(canvas),
-              easing: fabric.util.ease.easeInOutQuad,
-            }
-          );
-          marker.animate(
-            { top: clampedY },
-            {
-              duration: 300,
-              onChange: canvas.requestRenderAll.bind(canvas),
-              easing: fabric.util.ease.easeInOutQuad,
-            }
-          );
-        } catch (e) {
-          try {
-            (existing as any).set({ left: clampedX, top: clampedY });
-          } catch (err) { }
+          (existing as any).set({ left: clampedX, top: clampedY });
+          canvas.requestRenderAll();
+        } catch (err) {
+          console.error("Error updating marker:", err);
         }
       });
 
       canvas.requestRenderAll();
     } catch (e) {
-      // swallow parse/render errors
       console.error("updateLiveMarker error", e);
     }
   };
 
-  // Start SSE connection
+  // SSE via fetch (supports auth token)
   const startLiveTracking = () => {
     if (!editor?.canvas) return;
+
+    if (!selectAsset) {
+      alert("Please select an asset first");
+      return;
+    }
+
     setLiveTracking(true);
 
-    // Close any existing connection
     if (liveSourceRef.current) {
-      try {
-        liveSourceRef.current.close();
-      } catch (e) { }
+      try { liveSourceRef.current.close(); } catch (e) { }
       liveSourceRef.current = null;
     }
     if (reconnectTimeoutRef.current) {
@@ -262,50 +199,85 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     reconnectAttemptsRef.current = 0;
 
     const openEventSource = () => {
-      const url = `${SSE_URL_BASE}?asset_id=${encodeURIComponent(
-        selectAsset || ""
-      )}`;
-      const source = new EventSource(url);
+      const url = `${SSE_URL_BASE}?asset_id=${encodeURIComponent(selectAsset)}`;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
+      const controller = new AbortController();
+      const signal = controller.signal;
 
-      source.onopen = () => {
-        console.log("SSE open", url);
-        reconnectAttemptsRef.current = 0;
-      };
-
-      source.onmessage = (ev) => {
-        const parsed = parseSSEData(ev.data);
-        // If server wraps actual payload under data property use parsed.data
-        const payload = parsed?.data ?? parsed;
-        updateLiveMarker(payload);
-      };
-
-      source.onerror = (err) => {
-        console.warn("SSE error", err);
-        // Close source to allow reconnect scheduling
+      const start = async () => {
         try {
-          source.close();
-        } catch (e) { }
-        liveSourceRef.current = null;
-        setLiveTracking(false);
+          const resp = await fetch(url, {
+            method: "GET",
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              Accept: "text/event-stream",
+            },
+            credentials: "include",
+            signal,
+          });
 
-        // Exponential backoff reconnect
-        const attempt = reconnectAttemptsRef.current ?? 0;
-        const delay = Math.min(30000, 1000 * Math.pow(2, attempt)); // up to 30s
-        reconnectAttemptsRef.current = attempt + 1;
-        console.warn(`SSE will retry in ${delay}ms (attempt ${attempt + 1})`);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          openEventSource();
-          setLiveTracking(true);
-        }, delay);
+          if (!resp.ok) {
+            throw new Error(`SSE fetch failed: ${resp.status}`);
+          }
+
+          reconnectAttemptsRef.current = 0;
+
+          const reader = resp.body?.getReader();
+          if (!reader) throw new Error("No readable stream for SSE");
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buffer.indexOf("\n\n")) !== -1) {
+              const chunk = buffer.slice(0, idx);
+              buffer = buffer.slice(idx + 2);
+              const lines = chunk.split(/\r?\n/);
+              let data = "";
+              for (const line of lines) {
+                if (line.startsWith("data:")) {
+                  data += line.slice(5).trim() + "\n";
+                }
+              }
+              if (data) {
+                const parsed = parseSSEData(data.trim());
+                const payload = parsed?.data ?? parsed;
+                updateLiveMarker(payload);
+              }
+            }
+          }
+        } catch (err: any) {
+          if (signal.aborted) return;
+          console.warn("SSE error", err);
+          liveSourceRef.current = null;
+          setLiveTracking(false);
+
+          const attempt = reconnectAttemptsRef.current ?? 0;
+          const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
+          reconnectAttemptsRef.current = attempt + 1;
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            openEventSource();
+            setLiveTracking(true);
+          }, delay);
+        }
       };
 
-      liveSourceRef.current = source;
+      start();
+
+      liveSourceRef.current = {
+        close: () => controller.abort(),
+      };
     };
 
     openEventSource();
   };
 
-  // Stop SSE and remove marker
   const stopLiveTracking = () => {
     setLiveTracking(false);
 
@@ -314,16 +286,13 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
       reconnectTimeoutRef.current = null;
     }
     if (liveSourceRef.current) {
-      try {
-        liveSourceRef.current.close();
-      } catch (e) { }
+      try { liveSourceRef.current.close(); } catch (e) { }
       liveSourceRef.current = null;
     }
 
-    // remove all markers from canvas
     try {
       if (!editor?.canvas) return;
-      const { canvas } = editor;
+      const canvas = editor.canvas;
       Object.keys(liveMarkersRef.current || {}).forEach((k) => {
         try {
           const obj = liveMarkersRef.current[k];
@@ -331,6 +300,10 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         } catch (e) { }
       });
       liveMarkersRef.current = {};
+
+      const labels = canvas.getObjects().filter((obj: any) => obj.isCoordLabel);
+      labels.forEach((obj: any) => canvas.remove(obj));
+
       canvas.requestRenderAll();
     } catch (e) { }
   };
@@ -357,17 +330,17 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
 
   const centerCanvas = () => {
     if (!editor?.canvas) return;
-    const { canvas } = editor;
+    const canvas = editor.canvas;
     canvas.setZoom(1);
     setZoom(1);
     canvas.absolutePan(new fabric.Point(0, 0));
     canvas.requestRenderAll();
   };
 
-  // Canvas mouse wheel zoom (Ctrl + wheel only; scroll-panning removed)
+  // Mouse wheel: Ctrl+scroll = zoom, Shift+scroll = horizontal pan, scroll = vertical pan
   useEffect(() => {
     if (!editor?.canvas) return;
-    const { canvas } = editor;
+    const canvas = editor.canvas;
 
     const wheelHandler = function (opt: fabric.TEvent) {
       const e = opt?.e as WheelEvent;
@@ -382,6 +355,18 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         e.preventDefault();
         e.stopPropagation();
         setZoom(z);
+      } else if (e.shiftKey) {
+        const vpt = canvas.viewportTransform!;
+        vpt[4] += -delta;
+        canvas.requestRenderAll();
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        const vpt = canvas.viewportTransform!;
+        vpt[5] += -delta;
+        canvas.requestRenderAll();
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
 
@@ -394,7 +379,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
   // Panning controls (spacebar for grab, middle mouse for pan)
   useEffect(() => {
     if (!editor?.canvas) return;
-    const { canvas } = editor;
+    const canvas = editor.canvas;
     const canvasElement = canvas.getElement();
 
     let isPanning = false;
@@ -483,19 +468,14 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     };
   }, [editor]);
 
-  // Load the floorplan image into the canvas and add corner refs
+  // Load the floorplan image into the canvas
   useEffect(() => {
     if (!editor?.canvas) return;
-    const { canvas } = editor;
+    const canvas = editor.canvas;
 
-    // remove previous floorplan if any
     try {
-      const existing = canvas
-        .getObjects()
-        .find((o: any) => (o as any).isLayout);
-      if (existing) {
-        canvas.remove(existing);
-      }
+      const existing = canvas.getObjects().find((o: any) => o.isLayout);
+      if (existing) canvas.remove(existing);
     } catch (e) { }
 
     try {
@@ -504,14 +484,13 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
       loader.onload = () => {
         const origW = loader.naturalWidth || loader.width || 0;
         const origH = loader.naturalHeight || loader.height || 0;
-        if (origW && origH) setFloorOriginalSize({ w: origW, h: origH });
 
         fabric.Image.fromURL(image as string)
           .then((fimg: fabric.Image) => {
             try {
               const cW = canvas.getWidth() || 1;
               const cH = canvas.getHeight() || 1;
-              const scale = Math.min(cW / origW, cH / origH, 1);
+              const scale = Math.min(cW / origW, cH / origH, 1) * 0.9;
               const displayW = origW * scale;
               const displayH = origH * scale;
               const left = Math.max(0, (cW - displayW) / 2);
@@ -531,95 +510,44 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
               fimg.scaleY = scale;
               (fimg as any).__originalWidth = origW;
               (fimg as any).__originalHeight = origH;
-              // store the canonical physical size on the image so we can map
-              // centimeter coordinates into pixels consistently
-              (fimg as any).__physWidthCm = PHYS_FLOOR_WIDTH_CM;
-              (fimg as any).__physHeightCm = PHYS_FLOOR_HEIGHT_CM;
               (fimg as any).isLayout = true;
 
               canvas.add(fimg);
-              try {
-                canvas.sendObjectToBack(fimg);
-              } catch (e) { }
+              try { canvas.sendObjectToBack(fimg); } catch (e) { }
 
-              // ensure dotted grid background is present beneath the floor
-              try {
-                setDottedGridBackground();
-              } catch (e) { }
+              try { setDottedGridBackground(); } catch (e) { }
 
-              // remove previous corner refs
-              try {
-                const old = canvas
-                  .getObjects()
-                  .filter((o: any) => (o as any).isCornerRef);
-                old.forEach((o: any) => canvas.remove(o));
-              } catch (e) { }
+              // Corner coordinate labels
+              const corners = [
+                { x: left, y: top, label: "TL (0,0)", color: "red" },
+                { x: left + displayW, y: top, label: "TR (523,0)", color: "blue" },
+                { x: left, y: top + displayH, label: "BL (0,-427)", color: "green" },
+                { x: left + displayW, y: top + displayH, label: "BR (523,-427)", color: "purple" },
+              ];
 
-              // add 4 corner refs
-              try {
-                const margin = 12;
-                const tlx = left + margin;
-                const tly = top + margin;
-                const trx = left + displayW - margin;
-                const try_ = top + margin;
-                const blx = left + margin;
-                const bly = top + displayH - margin;
-                const brx = left + displayW - margin;
-                const bry = top + displayH - margin;
-
-                const makeRef = (
-                  x: number,
-                  y: number,
-                  labelText: string,
-                  corner: string
-                ) => {
-                  const c = new fabric.Circle({
-                    left: x,
-                    top: y,
-                    radius: 6,
-                    fill: "#ff4d4f",
-                    stroke: "#fff",
-                    strokeWidth: 1,
-                    originX: "center",
-                    originY: "center",
-                    selectable: true,
-                    evented: true,
-                  });
-                  const txt = new fabric.Text(labelText, {
-                    left: x + 10,
-                    top: y - 6,
-                    fontSize: 12,
-                    fill: "#111",
-                    originX: "left",
-                    originY: "center",
-                    selectable: false,
-                    evented: false,
-                  });
-                  const group = new fabric.Group([c, txt], {
-                    left: x,
-                    top: y,
-                    selectable: true,
-                    evented: true,
-                    hasControls: true,
-                  });
-                  try {
-                    const scale = fimg.scaleX || 1;
-                    (group as any).isCornerRef = true;
-                    (group as any).corner = corner;
-                    (group as any).displayX = x;
-                    (group as any).displayY = y;
-                    (group as any).imgX = Math.round((x - left) / scale);
-                    (group as any).imgY = Math.round((y - top) / scale);
-                  } catch (e) { }
-                  canvas.add(group);
-                  return group;
-                };
-
-                makeRef(tlx, tly, "TL", "top-left");
-                makeRef(trx, try_, "TR", "top-right");
-                makeRef(blx, bly, "BL", "bottom-left");
-                makeRef(brx, bry, "BR", "bottom-right");
-              } catch (e) { }
+              corners.forEach((corner) => {
+                const circle = new fabric.Circle({
+                  left: corner.x - 5,
+                  top: corner.y - 5,
+                  radius: 5,
+                  fill: corner.color,
+                  stroke: "#fff",
+                  strokeWidth: 1,
+                  selectable: false,
+                  evented: false,
+                });
+                const text = new fabric.Text(corner.label, {
+                  left: corner.x + 10,
+                  top: corner.y - 10,
+                  fontSize: 12,
+                  fill: corner.color,
+                  backgroundColor: "rgba(255,255,255,0.7)",
+                  selectable: false,
+                  evented: false,
+                });
+                canvas.add(circle);
+                canvas.add(text);
+              });
 
               canvas.requestRenderAll();
             } catch (e) { }
@@ -632,12 +560,8 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
             fimg.set({ left: 0, top: 0, selectable: false, evented: false });
             (fimg as any).isLayout = true;
             canvas.add(fimg);
-            try {
-              canvas.sendObjectToBack(fimg);
-            } catch (e) { }
-            try {
-              setDottedGridBackground();
-            } catch (e) { }
+            try { canvas.sendObjectToBack(fimg); } catch (e) { }
+            try { setDottedGridBackground(); } catch (e) { }
             canvas.requestRenderAll();
           })
           .catch(() => { });
@@ -645,7 +569,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     } catch (e) { }
   }, [editor, image]);
 
-  // cleanup SSE on unmount
+  // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -653,12 +577,10 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         reconnectTimeoutRef.current = null;
       }
       if (liveSourceRef.current) {
-        try {
-          liveSourceRef.current.close();
-        } catch (e) { }
+        try { liveSourceRef.current.close(); } catch (e) { }
         liveSourceRef.current = null;
       }
-      // remove marker
+
       if (editor?.canvas) {
         try {
           Object.keys(liveMarkersRef.current || {}).forEach((k) => {
@@ -671,8 +593,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         liveMarkersRef.current = {};
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [editor]);
 
   // Fetch all assets
   useEffect(() => {
@@ -680,11 +601,9 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
       setLoading(true);
       const fetchAssets = async () => {
         const response = await getAllAssetData(siteID);
-        // console.log(response);
         const activeAsset = response?.filter(
           (asset: any) => asset?.active_tracking
         );
-
         setAllAsset(activeAsset);
       };
       fetchAssets();
@@ -696,7 +615,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
   }, [siteID]);
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
+    <div className="relative w-full h-full flex flex-col">
       {loading && (
         <div className="w-full h-full absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="text-lg font-semibold">
@@ -709,8 +628,9 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
         <AppSelect
           className="w-64"
           label="Select Asset"
-          onchange={onSelcteAsset}
-          options={allAsset?.map((item: any, i: any) => ({
+          value={selectAsset}
+          onchange={onSelectAsset}
+          options={allAsset?.map((item: any) => ({
             label: item?.asset_name,
             value: String(item?.asset_id),
           }))}
@@ -720,7 +640,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
             if (liveTracking) stopLiveTracking();
             else startLiveTracking();
           }}
-          variant="default"
+          variant={liveTracking ? "destructive" : "default"}
           label={liveTracking ? "Stop Live" : "Live Tracking"}
         >
         </AppButton>

@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { colors } from "@/config/theme";
 import { toast } from "sonner";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getCameras, getVideoFeedV2, CameraStream, StreamConfig, ModelConfig } from "@/app/services/realtime/realtime";
-import { updateEPDValue } from "@/app/services/epd/epd";
-import { getLayout } from "@/lib/layout";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import {
   RetailHeader,
@@ -16,11 +14,6 @@ import {
   RetailCustomDropdown,
 } from "@/app/component/app-retail";
 import type { DropdownOption } from "@/app/component/app-retail/types";
-import SensorsEpdControl from "@/app/component/app-experience/SensorsEpdControl";
-import type { EPDConfig } from "@/config/devices";
-import { epdColorMap, retailESLDevices } from "@/config/devices";
-import type { EPDFieldValues } from "@/app/component/app-experience/types";
-import { useQueryParams } from "@/hooks/useQueryParams";
 import { useExperienceState } from "@/hooks/useExperienceState";
 
 // ===========================================
@@ -36,7 +29,6 @@ const CustomDropdown = RetailCustomDropdown;
 
 const TABS = {
   stream: "Video Streams",
-  epd: "EPD Control",
   analytics: "Analytics",
 } as const;
 
@@ -47,8 +39,6 @@ const TABS_ARRAY = Object.values(TABS);
 // ===========================================
 
 function RetailExperienceContent() {
-  const { getParam } = useQueryParams();
-  // Auth state
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Page state with persistence
@@ -67,10 +57,6 @@ function RetailExperienceContent() {
   const [videoStatus, setVideoStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [videoErrorMessage, setVideoErrorMessage] = useState<string>("");
   const [camerasLoading, setCamerasLoading] = useState(false);
-
-  // Retail EPD control state
-  const [retailEpdValues, setRetailEpdValues] = useState<EPDFieldValues>({});
-  const [retailEpdUpdating, setRetailEpdUpdating] = useState(false);
 
   // Stream refs for cleanup
   const previousStreamId = useRef<string | null>(null);
@@ -120,70 +106,6 @@ function RetailExperienceContent() {
       loadCameras();
     }
   }, [isAuthenticated, authLoading, showVideo, activeTab]);
-
-  // ===========================================
-  // Retail EPD Control (ESL)
-  // ===========================================
-
-  const retailTinFilter = useMemo(() => {
-    const param = getParam("epd_tins");
-    if (!param) return null;
-    return param.split(",").map((tin) => tin.trim()).filter(Boolean);
-  }, [getParam]);
-
-  const retailEpdDevices = useMemo<EPDConfig[]>(() => {
-    const devices = retailTinFilter
-      ? retailESLDevices.filter((device) => retailTinFilter.includes(device.tin))
-      : retailESLDevices;
-    return devices.map((device) => ({
-      tin: device.tin,
-      displayName: device.displayName,
-      size: device.size,
-      color: device.color,
-      width: device.width,
-      height: device.height,
-      fields: device.productFields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        type: field.type === "price" ? "price" : "text",
-        defaultValue: field.defaultValue,
-      })),
-    }));
-  }, [retailTinFilter]);
-
-  useEffect(() => {
-    const initialValues: EPDFieldValues = {};
-    retailEpdDevices.forEach((epd) => {
-      initialValues[epd.tin] = {};
-      epd.fields.forEach((field) => {
-        initialValues[epd.tin][field.key] = field.defaultValue ?? "";
-      });
-    });
-    setRetailEpdValues(initialValues);
-  }, [retailEpdDevices]);
-
-  const handleRetailEpdFieldChange = useCallback(
-    (tin: string, fieldKey: string, value: string | number) => {
-      setRetailEpdValues((prev) => ({
-        ...prev,
-        [tin]: { ...prev[tin], [fieldKey]: value },
-      }));
-    },
-    []
-  );
-
-  const handleUpdateSingleRetailEpd = useCallback(
-    async (epd: EPDConfig) => {
-      setRetailEpdUpdating(true);
-      try {
-        const values = retailEpdValues[epd.tin] || {};
-        await updateEPDValue(epd.tin, values);
-      } finally {
-        setRetailEpdUpdating(false);
-      }
-    },
-    [retailEpdValues]
-  );
 
   // ===========================================
   // Stream Handlers
@@ -511,7 +433,7 @@ function RetailExperienceContent() {
         show={showVideo}
         onSkip={skipVideo}
         title="Retail Simulation"
-        subtitle="Experience real-time video streaming with model selection and EPD control."
+        subtitle="Experience real-time video streaming with model selection and analytics."
         buttonLabel="Skip Intro"
         accentColor={accent}
       />
@@ -547,17 +469,6 @@ function RetailExperienceContent() {
               videoUrl={videoUrl}
               videoErrorMessage={videoErrorMessage}
               onOpenVideo={() => window.open(videoUrl, "_blank")}
-            />
-          )}
-          {activeTab === TABS.epd && (
-            <SensorsEpdControl
-              sensorEPDDevices={retailEpdDevices}
-              epdColorMap={epdColorMap}
-              epdValues={retailEpdValues}
-              updating={retailEpdUpdating}
-              onEPDFieldChange={handleRetailEpdFieldChange}
-              onUpdateSingleEPD={handleUpdateSingleRetailEpd}
-              accentColor={accent}
             />
           )}
           {activeTab === TABS.analytics && (
