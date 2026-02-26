@@ -10,7 +10,7 @@ import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import {
   RetailHeader,
   RetailStreamTab,
-  RetailAnalyticsTab,
+  RetailHeatmapView,
   RetailCustomDropdown,
 } from "@/app/component/app-retail";
 import type { DropdownOption } from "@/app/component/app-retail/types";
@@ -29,7 +29,8 @@ const CustomDropdown = RetailCustomDropdown;
 
 const TABS = {
   stream: "Video Streams",
-  analytics: "Analytics",
+  analytics: "Retail Analytics",
+  productInteraction: "Product Interaction",
 } as const;
 
 const TABS_ARRAY = Object.values(TABS);
@@ -402,13 +403,6 @@ function RetailExperienceContent() {
   }
 
   // ===========================================
-  // Render: Analytics Tab
-  // ===========================================
-
-  function renderAnalyticsTab() {
-    return <RetailAnalyticsTab accent={accent} />;
-  }
-  // ===========================================
   // Main Render
   // ===========================================
 
@@ -472,7 +466,10 @@ function RetailExperienceContent() {
             />
           )}
           {activeTab === TABS.analytics && (
-            <RetailAnalyticsTab accent={accent} />
+            <RetailHeatmapView mode="zone" accent={accent} />
+          )}
+          {activeTab === TABS.productInteraction && (
+            <RetailHeatmapView mode="product" accent={accent} />
           )}
         </main>
       </div>

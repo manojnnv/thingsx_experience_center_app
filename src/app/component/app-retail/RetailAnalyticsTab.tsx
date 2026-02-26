@@ -159,22 +159,25 @@ function HeatmapView({
     const layoutWidth = layoutBounds.width;
     const layoutHeight = layoutBounds.height;
 
-    const numericCounts = sourceData.map((h: any) => getCountValue(h)).filter((n) => n !== null) as number[];
-    const max = numericCounts.length > 0 ? Math.max(...numericCounts) : 0;
-    const min = 0;
-    setHeatmapRange({ min, max });
-
     const countMap = new Map<string, number>();
     sourceData.forEach((h: any) => {
       const zid = h?.zone_id ?? h?.zoneId ?? h?.id;
       const c = getCountValue(h);
-      if (zid !== undefined && c !== null) countMap.set(String(zid), c);
+      if (zid !== undefined && c !== null) {
+        const key = String(zid);
+        countMap.set(key, (countMap.get(key) ?? 0) + c);
+      }
     });
 
+    const numericCounts = Array.from(countMap.values());
+    const max = numericCounts.length > 0 ? Math.max(...numericCounts) : 0;
+    const min = 0;
+    setHeatmapRange({ min, max });
+
     const zoneHeatSpots: { x: number; y: number; count: number; intensity: number; radius: number }[] = [];
-    const LABEL_FONT_SIZE = 24;
-    const LABEL_BG_PADDING = 12;
-    const LABEL_MIN_WIDTH = 80;
+    const LABEL_FONT_SIZE = 13;
+    const LABEL_BG_PADDING = 5;
+    const LABEL_MIN_WIDTH = 40;
 
     canvas.getObjects().forEach((obj: any) => {
       try {
@@ -370,6 +373,50 @@ function HeatmapView({
     canvas.requestRenderAll();
   };
 
+  const fitCanvasToContent = (padding = 40) => {
+    if (!editor?.canvas) return;
+    const canvas = editor.canvas;
+    const objs = canvas.getObjects();
+    if (!objs || objs.length === 0) return centerCanvas();
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    objs.forEach((o: any) => {
+      try {
+        const b = o.getBoundingRect(true);
+        minX = Math.min(minX, b.left);
+        minY = Math.min(minY, b.top);
+        maxX = Math.max(maxX, b.left + b.width);
+        maxY = Math.max(maxY, b.top + b.height);
+      } catch {
+        minX = Math.min(minX, o.left || 0);
+        minY = Math.min(minY, o.top || 0);
+        maxX = Math.max(maxX, (o.left || 0) + (o.width || 0));
+        maxY = Math.max(maxY, (o.top || 0) + (o.height || 0));
+      }
+    });
+
+    if (!isFinite(minX) || !isFinite(maxX)) return centerCanvas();
+
+    const boundsW = maxX - minX;
+    const boundsH = maxY - minY;
+    const cW = canvas.getWidth() || 1;
+    const cH = canvas.getHeight() || 1;
+    const newZoom = Math.min((cW - padding) / boundsW, (cH - padding) / boundsH, 1);
+    const cx = minX + boundsW / 2;
+    const cy = minY + boundsH / 2;
+    const offsetX = cW / 2 - cx * newZoom;
+    const offsetY = cH / 2 - cy * newZoom;
+
+    canvas.setZoom(newZoom);
+    try {
+      canvas.setViewportTransform([newZoom, 0, 0, newZoom, offsetX, offsetY]);
+    } catch {
+      canvas.absolutePan(new fabric.Point(-offsetX, -offsetY));
+    }
+    setZoom(newZoom);
+    canvas.requestRenderAll();
+  };
+
   useEffect(() => {
     setDottedGridBackground();
   }, [editor]);
@@ -426,6 +473,7 @@ function HeatmapView({
         layoutLoadedRef.current = true;
         setTimeout(() => {
           try { applyHeatmap(heatMapDataRef.current); } catch { }
+          try { fitCanvasToContent(); } catch { }
         }, 50);
       });
     } catch (e) {
@@ -691,13 +739,13 @@ function HeatmapView({
         </div>
         {tooltip.visible && (
           <div className="absolute z-[100] pointer-events-none" style={{ left: tooltip.x, top: tooltip.y, transform: "translateY(-100%)" }}>
-            <div className="bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-700 min-w-[140px]">
-              <div className="text-xs text-gray-400 mb-1">Zone</div>
-              <div className="font-semibold text-sm truncate max-w-[180px]">{tooltip.zoneName}</div>
-              <div className="border-t border-gray-700 my-1.5"></div>
+            <div className="px-3 py-2 rounded-lg shadow-xl min-w-[140px]" style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}>
+              <div className="text-xs mb-1" style={{ color: colors.textMuted }}>Zone</div>
+              <div className="font-semibold text-sm truncate max-w-[180px]" style={{ color: colors.primary }}>{tooltip.zoneName}</div>
+              <div className="my-1.5" style={{ borderTop: `1px solid ${colors.border}` }}></div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{isProduct ? "Interactions" : "Visitors"}</span>
-                <span className="font-bold text-lg">{tooltip.count !== null ? tooltip.count : "—"}</span>
+                <span className="text-xs" style={{ color: colors.textMuted }}>{isProduct ? "Interactions" : "Visitors"}</span>
+                <span className="font-bold text-lg" style={{ color: colors.primary }}>{tooltip.count !== null ? tooltip.count : "—"}</span>
               </div>
             </div>
           </div>
@@ -865,44 +913,6 @@ function HeatmapView({
   );
 }
 
-export default function RetailAnalyticsTab({ accent }: { accent: string }) {
-  const [analyticsType, setAnalyticsType] = useState<"zone" | "product">("zone");
+export { HeatmapView as RetailHeatmapView };
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-none flex items-center justify-between flex-wrap gap-4 pb-1">
-        <div>
-          <h2 className="text-2xl font-bold mb-1" style={{ color: colors.text }}>
-            {analyticsType === "zone" ? "Retail Analytics" : "Product Interaction"}
-          </h2>
-        </div>
-        <div className="flex items-center gap-2 p-1 rounded-xl" style={{ backgroundColor: colors.backgroundCard }}>
-          <button
-            onClick={() => setAnalyticsType("zone")}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              backgroundColor: analyticsType === "zone" ? accent : "transparent",
-              color: analyticsType === "zone" ? colors.background : colors.textMuted,
-            }}
-          >
-            Retail Analytics
-          </button>
-          <button
-            onClick={() => setAnalyticsType("product")}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              backgroundColor: analyticsType === "product" ? accent : "transparent",
-              color: analyticsType === "product" ? colors.background : colors.textMuted,
-            }}
-          >
-            Product Interaction
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0">
-        <HeatmapView mode={analyticsType} accent={accent} />
-      </div>
-    </div>
-  );
-}
+export default HeatmapView;
