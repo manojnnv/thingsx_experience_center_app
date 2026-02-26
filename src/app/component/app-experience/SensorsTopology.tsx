@@ -20,11 +20,16 @@ function SensorsTopology({
   categoryConfig: Record<string, { label?: string }>;
 }) {
   const STALE_THRESHOLD_MS = 15000; // 15s — sensor is "stale" if no fresh data
+  const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
 
-  // Count sensors that have fresh data
-  const activeSensorCount = Array.from(connectedSensors.values()).filter(
-    (s) => Date.now() - s.lastReceivedAt.getTime() < STALE_THRESHOLD_MS
-  ).length;
+  const isVisibleSensor = (s: SensorLiveData) => {
+    if (Date.now() - s.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) return false;
+    const d = getDeviceForSensor(s.tin);
+    return !d || !HIDDEN_CATEGORIES.has(d.category);
+  };
+
+  // Count sensors that have fresh data (excluding hidden categories)
+  const activeSensorCount = Array.from(connectedSensors.values()).filter(isVisibleSensor).length;
 
   // Fixed positions for EVERY configured device — layout never shifts
   const sensorPositions = devices.map((device, i) => {
@@ -155,7 +160,7 @@ function SensorsTopology({
               </thead>
               <tbody>
                 {Array.from(connectedSensors.values())
-                  .filter((s) => Date.now() - s.lastReceivedAt.getTime() < STALE_THRESHOLD_MS)
+                  .filter(isVisibleSensor)
                   .map((sensor, idx) => {
                   const device = getDeviceForSensor(sensor.tin);
                   const history = sensor.history || [];

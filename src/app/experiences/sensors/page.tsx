@@ -420,7 +420,7 @@ function SensorsPageContent() {
           {!loading && activeTab === TABS.topology && (
             <div className="h-full">
               <SensorsTopology
-                devices={devices}
+                devices={devices.filter((d) => d.category !== "load_cell" && d.category !== "addressable_rgb")}
                 connectedSensors={connectedSensors}
                 getDeviceForSensor={getDeviceForSensor}
                 onSelectDevice={handleSelectDevice}
