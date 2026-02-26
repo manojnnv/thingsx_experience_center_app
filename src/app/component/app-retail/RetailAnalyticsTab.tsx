@@ -56,9 +56,11 @@ function HeatmapLegend({
 function HeatmapView({
   mode,
   accent,
+  onViewStream,
 }: {
   mode: "zone" | "product";
   accent: string;
+  onViewStream?: (cameraName: string) => void;
 }) {
   const isProduct = mode === "product";
   const [loading, setLoading] = useState(false);
@@ -768,17 +770,46 @@ function HeatmapView({
             ? `Product Interaction for ${selectedZone.name ?? "Zone"}`
             : `Retail Analytics for ${selectedZone.name ?? "Zone"}`
         }
-        footer={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsDrawerOpen(false)}
-              className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
-              style={{ backgroundColor: accent, color: colors.background }}
-            >
-              Close
-            </button>
-          </div>
-        }
+        footer={(() => {
+          const ZONE_CAMERA_MAP: Record<string, string> = {
+            "daily essentials": "Shopping_Area_CAM7",
+            "sanitation": "Shopping_Area_CAM7",
+            "packaged food": "Shopping_Area_CAM53",
+          };
+          const zoneCam = isProduct && onViewStream && selectedZone.name
+            ? ZONE_CAMERA_MAP[selectedZone.name.toLowerCase()] ?? null
+            : null;
+          return (
+            <div className="flex gap-2">
+              {zoneCam && (
+                <button
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    onViewStream!(zoneCam);
+                  }}
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5"
+                  style={{ backgroundColor: accent, color: colors.background }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  View Stream
+                </button>
+              )}
+              <button
+                onClick={() => setIsDrawerOpen(false)}
+                className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                style={{
+                  backgroundColor: zoneCam ? `${accent}15` : accent,
+                  color: zoneCam ? accent : colors.background,
+                  border: `1px solid ${accent}`,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          );
+        })()}
       >
         <div className="p-4 space-y-4">
           {!selectedZoneData ? (
