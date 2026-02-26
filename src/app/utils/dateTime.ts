@@ -60,6 +60,25 @@ const formatTime = (parts: ReturnType<typeof getParts>, hour12: boolean) => {
   return `${parts.hour}:${parts.minute}`;
 };
 
+export const formatDateAndTime = (dates: Date[]): string[] => {
+  if (!dates) return [];
+  return dates.map((date) => {
+    if (!date) return "";
+    const utcDate = new Date(
+      Date.UTC(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        date.getHours(),
+        date.getMinutes(),
+        date.getSeconds(),
+        date.getMilliseconds()
+      )
+    );
+    return utcDate.toISOString();
+  });
+};
+
 export const formatDateTime = (utcTime: string, timeOnly = false) => {
   if (!utcTime) return "";
   const settings = readSettings();

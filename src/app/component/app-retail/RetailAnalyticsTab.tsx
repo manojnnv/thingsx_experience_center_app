@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
 import * as fabric from "fabric";
 import { Minus, Plus, RotateCcw, SquareSquare } from "lucide-react";
@@ -56,9 +56,11 @@ function HeatmapLegend({
 function HeatmapView({
   mode,
   accent,
+  onViewStream,
 }: {
   mode: "zone" | "product";
   accent: string;
+  onViewStream?: (cameraName: string) => void;
 }) {
   const isProduct = mode === "product";
   const [loading, setLoading] = useState(false);
@@ -73,6 +75,8 @@ function HeatmapView({
   });
   const [selectedZoneData, setSelectedZoneData] = useState<any | any[] | null>(null);
   const [heatMapData, setHeatMapData] = useState<any[]>([]);
+  const heatMapDataRef = useRef<any[]>([]);
+  const layoutLoadedRef = useRef(false);
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
     min: 0,
     max: 0,
@@ -109,6 +113,22 @@ function HeatmapView({
     return [];
   };
 
+  const isZoneObject = (obj: any): boolean => {
+    return Boolean(
+      obj.isZone || obj.zoneId || obj.zone_id ||
+      obj.zoneGroup || obj.zone_group ||
+      obj.zoneName || obj.zone_name
+    );
+  };
+
+  const getZoneId = (obj: any): string => {
+    return String(obj.zoneId ?? obj.zone_id ?? obj.id ?? "");
+  };
+
+  const getZoneName = (obj: any): string => {
+    return obj.zoneName ?? obj.zone_name ?? obj.labelText ?? obj.name ?? `Zone ${getZoneId(obj)}`;
+  };
+
   const hexToRgb = (hex: string) => {
     const h = hex.replace("#", "");
     const bigint = parseInt(h, 16);
@@ -119,12 +139,12 @@ function HeatmapView({
     };
   };
 
-  const applyHeatmap = (data?: any[], opts?: { colors?: string[]; alpha?: number }) => {
+  const applyHeatmap = useCallback((data?: any[], opts?: { colors?: string[]; alpha?: number }) => {
     if (!editor?.canvas) return;
     const canvas = editor.canvas;
     const palette = opts?.colors ?? HEATMAP_GRADIENT;
     const alpha = typeof opts?.alpha === "number" ? opts.alpha : 0.7;
-    const sourceData = normalizeSource(data ?? heatMapData);
+    const sourceData = normalizeSource(data ?? heatMapDataRef.current);
     if (!sourceData || sourceData.length === 0) return;
 
     const existingOverlays = canvas.getObjects().filter((o: any) => o.isHeatmapOverlay);
@@ -141,34 +161,36 @@ function HeatmapView({
     const layoutWidth = layoutBounds.width;
     const layoutHeight = layoutBounds.height;
 
-    const numericCounts = sourceData.map((h: any) => getCountValue(h)).filter((n) => n !== null) as number[];
-    const max = numericCounts.length > 0 ? Math.max(...numericCounts) : 0;
-    const min = 0;
-    setHeatmapRange({ min, max });
-
     const countMap = new Map<string, number>();
     sourceData.forEach((h: any) => {
       const zid = h?.zone_id ?? h?.zoneId ?? h?.id;
       const c = getCountValue(h);
-      if (zid !== undefined && c !== null) countMap.set(String(zid), c);
+      if (zid !== undefined && c !== null) {
+        const key = String(zid);
+        countMap.set(key, (countMap.get(key) ?? 0) + c);
+      }
     });
 
+    const numericCounts = Array.from(countMap.values());
+    const max = numericCounts.length > 0 ? Math.max(...numericCounts) : 0;
+    const min = 0;
+    setHeatmapRange({ min, max });
+
     const zoneHeatSpots: { x: number; y: number; count: number; intensity: number; radius: number }[] = [];
-    const LABEL_FONT_SIZE = 24;
-    const LABEL_BG_PADDING = 12;
-    const LABEL_MIN_WIDTH = 80;
+    const LABEL_FONT_SIZE = 13;
+    const LABEL_BG_PADDING = 5;
+    const LABEL_MIN_WIDTH = 40;
 
     canvas.getObjects().forEach((obj: any) => {
       try {
-        const isZone = Boolean(obj.isZone || obj.zoneId || obj.zoneGroup);
-        if (!isZone) return;
+        if (!isZoneObject(obj)) return;
         let shape: any = obj;
         if (obj.type === "group" && typeof obj.getObjects === "function") {
           shape = obj.getObjects().find((c: any) => c.type !== "text") ?? obj;
         }
 
-        const zid = String(obj.zoneId ?? obj.id ?? "");
-        const zoneName = (obj as any).zoneName ?? (obj as any).labelText ?? `Zone ${zid}`;
+        const zid = getZoneId(obj);
+        const zoneName = getZoneName(obj);
         const count = countMap.get(zid) ?? null;
         const hasNumericCount = count !== null && Number.isFinite(count);
 
@@ -305,7 +327,7 @@ function HeatmapView({
       });
       canvas.requestRenderAll();
     }).catch((err) => console.error("Failed to create heatmap overlay:", err));
-  };
+  }, [editor]);
 
   const setDottedGridBackground = () => {
     if (!editor) return;
@@ -350,6 +372,50 @@ function HeatmapView({
     canvas.setZoom(1);
     setZoom(1);
     canvas.absolutePan(new fabric.Point(0, 0));
+    canvas.requestRenderAll();
+  };
+
+  const fitCanvasToContent = (padding = 40) => {
+    if (!editor?.canvas) return;
+    const canvas = editor.canvas;
+    const objs = canvas.getObjects();
+    if (!objs || objs.length === 0) return centerCanvas();
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    objs.forEach((o: any) => {
+      try {
+        const b = o.getBoundingRect(true);
+        minX = Math.min(minX, b.left);
+        minY = Math.min(minY, b.top);
+        maxX = Math.max(maxX, b.left + b.width);
+        maxY = Math.max(maxY, b.top + b.height);
+      } catch {
+        minX = Math.min(minX, o.left || 0);
+        minY = Math.min(minY, o.top || 0);
+        maxX = Math.max(maxX, (o.left || 0) + (o.width || 0));
+        maxY = Math.max(maxY, (o.top || 0) + (o.height || 0));
+      }
+    });
+
+    if (!isFinite(minX) || !isFinite(maxX)) return centerCanvas();
+
+    const boundsW = maxX - minX;
+    const boundsH = maxY - minY;
+    const cW = canvas.getWidth() || 1;
+    const cH = canvas.getHeight() || 1;
+    const newZoom = Math.min((cW - padding) / boundsW, (cH - padding) / boundsH, 1);
+    const cx = minX + boundsW / 2;
+    const cy = minY + boundsH / 2;
+    const offsetX = cW / 2 - cx * newZoom;
+    const offsetY = cH / 2 - cy * newZoom;
+
+    canvas.setZoom(newZoom);
+    try {
+      canvas.setViewportTransform([newZoom, 0, 0, newZoom, offsetX, offsetY]);
+    } catch {
+      canvas.absolutePan(new fabric.Point(-offsetX, -offsetY));
+    }
+    setZoom(newZoom);
     canvas.requestRenderAll();
   };
 
@@ -406,16 +472,24 @@ function HeatmapView({
           } catch { }
         }
         editor.canvas.requestRenderAll();
-        try {
-          setTimeout(() => {
-            try { applyHeatmap(); } catch { }
-          }, 50);
-        } catch { }
+        layoutLoadedRef.current = true;
+        setTimeout(() => {
+          try { applyHeatmap(heatMapDataRef.current); } catch { }
+          try { fitCanvasToContent(); } catch { }
+        }, 50);
       });
     } catch (e) {
       console.error("Failed to load layout into canvas:", e);
     }
-  }, [editor, layout]);
+  }, [editor, layout, applyHeatmap]);
+
+  // Re-apply heatmap whenever data changes and layout is already loaded
+  useEffect(() => {
+    heatMapDataRef.current = heatMapData;
+    if (layoutLoadedRef.current && heatMapData.length > 0) {
+      try { applyHeatmap(heatMapData); } catch { }
+    }
+  }, [heatMapData, applyHeatmap]);
 
   useEffect(() => {
     if (!editor?.canvas) return;
@@ -423,8 +497,7 @@ function HeatmapView({
     const handleMouseOver = (opt: any) => {
       const target = opt.target;
       if (!target) return;
-      const isZone = Boolean(target.isZone || target.zoneId || target.zoneGroup);
-      if (!isZone) return;
+      if (!isZoneObject(target)) return;
       const zoneData = (target as any).zoneData;
       if (!zoneData) return;
       const canvasEl = canvas.getElement();
@@ -443,8 +516,7 @@ function HeatmapView({
     const handleMouseOut = (opt: any) => {
       const target = opt.target;
       if (!target) return;
-      const isZone = Boolean(target.isZone || target.zoneId || target.zoneGroup);
-      if (!isZone) return;
+      if (!isZoneObject(target)) return;
       setTooltip((prev) => ({ ...prev, visible: false }));
     };
     const handleMouseMove = (opt: any) => {
@@ -495,8 +567,7 @@ function HeatmapView({
         const objs = canvas.getObjects().slice().reverse();
         for (const obj of objs) {
           try {
-            const isZone = Boolean((obj as any).isZone || (obj as any).zoneId);
-            if (!isZone) continue;
+            if (!isZoneObject(obj)) continue;
             if (obj.type === "group" && typeof (obj as any).getObjects === "function") {
               const child = (obj as any).getObjects().find((c: any) => c.type !== "text");
               if (child && typeof (child as any).containsPoint === "function") {
@@ -520,8 +591,8 @@ function HeatmapView({
           } catch { }
         }
         if (found) {
-          const zid = (found as any).zoneId ?? (found as any).id ?? null;
-          const zname = (found as any).zoneName ?? (found as any).labelText ?? null;
+          const zid = getZoneId(found) || null;
+          const zname = getZoneName(found) || null;
           setSelectedZone({ id: zid ? String(zid) : null, name: zname });
           try {
             const src = Array.isArray(heatMapData) ? heatMapData : (heatMapData as any)?.data ?? [];
@@ -575,8 +646,8 @@ function HeatmapView({
         return;
       }
       const data = response?.data || [];
+      heatMapDataRef.current = data;
       setHeatMapData(data);
-      try { applyHeatmap(data); } catch { }
     } finally {
       setLoading(false);
     }
@@ -603,8 +674,8 @@ function HeatmapView({
           return;
         }
         const data = response?.data || [];
+        heatMapDataRef.current = data;
         setHeatMapData(data);
-        try { applyHeatmap(data); } catch { }
       } finally {
         setLoading(false);
       }
@@ -670,13 +741,13 @@ function HeatmapView({
         </div>
         {tooltip.visible && (
           <div className="absolute z-[100] pointer-events-none" style={{ left: tooltip.x, top: tooltip.y, transform: "translateY(-100%)" }}>
-            <div className="bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-700 min-w-[140px]">
-              <div className="text-xs text-gray-400 mb-1">Zone</div>
-              <div className="font-semibold text-sm truncate max-w-[180px]">{tooltip.zoneName}</div>
-              <div className="border-t border-gray-700 my-1.5"></div>
+            <div className="px-3 py-2 rounded-lg shadow-xl min-w-[140px]" style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}>
+              <div className="text-xs mb-1" style={{ color: colors.textMuted }}>Zone</div>
+              <div className="font-semibold text-sm truncate max-w-[180px]" style={{ color: colors.primary }}>{tooltip.zoneName}</div>
+              <div className="my-1.5" style={{ borderTop: `1px solid ${colors.border}` }}></div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{isProduct ? "Interactions" : "Visitors"}</span>
-                <span className="font-bold text-lg">{tooltip.count !== null ? tooltip.count : "—"}</span>
+                <span className="text-xs" style={{ color: colors.textMuted }}>{isProduct ? "Interactions" : "Visitors"}</span>
+                <span className="font-bold text-lg" style={{ color: colors.primary }}>{tooltip.count !== null ? tooltip.count : "—"}</span>
               </div>
             </div>
           </div>
@@ -699,17 +770,46 @@ function HeatmapView({
             ? `Product Interaction for ${selectedZone.name ?? "Zone"}`
             : `Retail Analytics for ${selectedZone.name ?? "Zone"}`
         }
-        footer={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsDrawerOpen(false)}
-              className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
-              style={{ backgroundColor: accent, color: colors.background }}
-            >
-              Close
-            </button>
-          </div>
-        }
+        footer={(() => {
+          const ZONE_CAMERA_MAP: Record<string, string> = {
+            "daily essentials": "Shopping_Area_CAM7",
+            "sanitation": "Shopping_Area_CAM7",
+            "packaged food": "Shopping_Area_CAM53",
+          };
+          const zoneCam = isProduct && onViewStream && selectedZone.name
+            ? ZONE_CAMERA_MAP[selectedZone.name.toLowerCase()] ?? null
+            : null;
+          return (
+            <div className="flex gap-2">
+              {zoneCam && (
+                <button
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    onViewStream!(zoneCam);
+                  }}
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5"
+                  style={{ backgroundColor: accent, color: colors.background }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  View Stream
+                </button>
+              )}
+              <button
+                onClick={() => setIsDrawerOpen(false)}
+                className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                style={{
+                  backgroundColor: zoneCam ? `${accent}15` : accent,
+                  color: zoneCam ? accent : colors.background,
+                  border: `1px solid ${accent}`,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          );
+        })()}
       >
         <div className="p-4 space-y-4">
           {!selectedZoneData ? (
@@ -844,44 +944,6 @@ function HeatmapView({
   );
 }
 
-export default function RetailAnalyticsTab({ accent }: { accent: string }) {
-  const [analyticsType, setAnalyticsType] = useState<"zone" | "product">("zone");
+export { HeatmapView as RetailHeatmapView };
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-none flex items-center justify-between flex-wrap gap-4 pb-1">
-        <div>
-          <h2 className="text-2xl font-bold mb-1" style={{ color: colors.text }}>
-            {analyticsType === "zone" ? "Retail Analytics" : "Product Interaction"}
-          </h2>
-        </div>
-        <div className="flex items-center gap-2 p-1 rounded-xl" style={{ backgroundColor: colors.backgroundCard }}>
-          <button
-            onClick={() => setAnalyticsType("zone")}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              backgroundColor: analyticsType === "zone" ? accent : "transparent",
-              color: analyticsType === "zone" ? colors.background : colors.textMuted,
-            }}
-          >
-            Retail Analytics
-          </button>
-          <button
-            onClick={() => setAnalyticsType("product")}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              backgroundColor: analyticsType === "product" ? accent : "transparent",
-              color: analyticsType === "product" ? colors.background : colors.textMuted,
-            }}
-          >
-            Product Interaction
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0">
-        <HeatmapView mode={analyticsType} accent={accent} />
-      </div>
-    </div>
-  );
-}
+export default HeatmapView;

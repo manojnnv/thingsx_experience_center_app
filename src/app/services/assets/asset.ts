@@ -5,6 +5,7 @@
  */
 
 import { api } from "@/app/utils/api";
+import { toast } from "sonner";
 
 export interface Asset {
   asset_id: number;
@@ -24,20 +25,15 @@ export interface AssetPosition {
   timestamp?: string;
 }
 
-/**
- * Get all assets for a site
- * Returns empty array if API is not available
- */
-export const getAllAssetData = async (siteId: string): Promise<Asset[]> => {
+export const getAllAssetData = async (siteID: string) => {
   try {
     const resp = await api.post("/v1/asset/fetch_all", {
-      site_id: siteId,
+      site_id: siteID || localStorage.getItem("site_id"),
     });
-    return resp?.data?.data || [];
+    toast.message(resp?.data?.message);
+    return resp?.data?.data;
   } catch (error) {
-    // Return empty array instead of throwing - API may not be available
-    console.warn("Asset API not available or returned error:", error);
-    return [];
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
 
@@ -65,6 +61,24 @@ export const getAssetLivePosition = async (assetId: string): Promise<AssetPositi
     return resp?.data?.data || null;
   } catch (error) {
     console.error("Error fetching asset position:", error);
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};
+
+export const passiveAssetTracking = async (params: {
+  asset_id: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  try {
+    const resp = await api.post("/v1/asset/passive-tracking", {
+      asset_id: params.asset_id,
+      start_date: params.startDate,
+      end_date: params.endDate,
+    });
+    toast.message(resp?.data?.message);
+    return resp?.data?.data;
+  } catch (error) {
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 };

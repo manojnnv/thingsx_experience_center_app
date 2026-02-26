@@ -44,3 +44,14 @@ export interface AppIconButtonProps
   variant?: ButtonVariant;
   classname?: string;
 }
+
+export interface DataTableProps<TData, TValue> {
+  columns: import("@tanstack/react-table").ColumnDef<TData, TValue>[];
+  data: TData[];
+  initialSearch?: string;
+  onRowClick?: (rowData: any) => void;
+  rowClassName?: string;
+  exculdeColumns?: string[];
+  showDownload?: boolean;
+  maxHeight?: string | number;
+}

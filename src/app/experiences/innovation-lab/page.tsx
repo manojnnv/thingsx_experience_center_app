@@ -55,16 +55,16 @@ export default function InnovationLabPage() {
 
   return (
     <div
-      className="min-h-screen text-white relative"
+      className="h-screen text-white relative flex flex-col overflow-hidden"
       style={{
         backgroundColor: colors.background,
         backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
         backgroundSize: "32px 32px",
       }}
     >
-      {/* Header – matches Retail/Sensors: no border, "Back" label */}
+      {/* Header */}
       <header
-        className="sticky top-0 z-40 px-8 py-4"
+        className="flex-none z-40 px-8 py-3"
         style={{ backgroundColor: `${colors.background}ee`, backdropFilter: "blur(10px)" }}
       >
         <div className="flex items-center justify-between">
@@ -85,9 +85,9 @@ export default function InnovationLabPage() {
         </div>
       </header>
 
-      <main className="relative z-10">
+      <main className="relative z-10 flex-1 min-h-0 overflow-y-auto">
         {/* Hero: Innovation Labs as a Service (ILaaS) – viewport 1 */}
-        <section className="min-h-screen flex flex-col justify-center max-w-5xl mx-auto px-8 py-16">
+        <section className="min-h-full flex flex-col justify-center max-w-5xl mx-auto px-8 py-12">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-4" style={{ color: colors.text }}>
             Innovation Labs as a Service{" "}
             <span style={{ color: accent }}>(ILaaS)</span>
@@ -118,7 +118,7 @@ export default function InnovationLabPage() {
         </section>
 
         {/* End-to-end journey – roadmap + details card in same viewport */}
-        <section className="min-h-screen flex flex-col max-w-5xl mx-auto px-8 py-6 md:py-8">
+        <section className="min-h-full flex flex-col max-w-5xl mx-auto px-8 py-4">
           <div className="flex flex-col flex-1 min-h-0">
             <h3 className="text-xl md:text-2xl font-bold text-center mb-1" style={{ color: colors.text }}>
               Our End-to-End <span style={{ color: accent }}>Innovation Journey</span>
