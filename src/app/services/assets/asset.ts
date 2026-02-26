@@ -64,3 +64,21 @@ export const getAssetLivePosition = async (assetId: string): Promise<AssetPositi
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
+export const passiveAssetTracking = async (params: {
+  asset_id: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  try {
+    const resp = await api.post("/v1/asset/passive-tracking", {
+      asset_id: params.asset_id,
+      start_date: params.startDate,
+      end_date: params.endDate,
+    });
+    toast.message(resp?.data?.message);
+    return resp?.data?.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};

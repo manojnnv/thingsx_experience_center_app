@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
 import * as fabric from "fabric";
 import { Minus, Plus, RotateCcw, SquareSquare } from "lucide-react";
@@ -73,6 +73,8 @@ function HeatmapView({
   });
   const [selectedZoneData, setSelectedZoneData] = useState<any | any[] | null>(null);
   const [heatMapData, setHeatMapData] = useState<any[]>([]);
+  const heatMapDataRef = useRef<any[]>([]);
+  const layoutLoadedRef = useRef(false);
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
     min: 0,
     max: 0,
@@ -109,6 +111,22 @@ function HeatmapView({
     return [];
   };
 
+  const isZoneObject = (obj: any): boolean => {
+    return Boolean(
+      obj.isZone || obj.zoneId || obj.zone_id ||
+      obj.zoneGroup || obj.zone_group ||
+      obj.zoneName || obj.zone_name
+    );
+  };
+
+  const getZoneId = (obj: any): string => {
+    return String(obj.zoneId ?? obj.zone_id ?? obj.id ?? "");
+  };
+
+  const getZoneName = (obj: any): string => {
+    return obj.zoneName ?? obj.zone_name ?? obj.labelText ?? obj.name ?? `Zone ${getZoneId(obj)}`;
+  };
+
   const hexToRgb = (hex: string) => {
     const h = hex.replace("#", "");
     const bigint = parseInt(h, 16);
@@ -119,12 +137,12 @@ function HeatmapView({
     };
   };
 
-  const applyHeatmap = (data?: any[], opts?: { colors?: string[]; alpha?: number }) => {
+  const applyHeatmap = useCallback((data?: any[], opts?: { colors?: string[]; alpha?: number }) => {
     if (!editor?.canvas) return;
     const canvas = editor.canvas;
     const palette = opts?.colors ?? HEATMAP_GRADIENT;
     const alpha = typeof opts?.alpha === "number" ? opts.alpha : 0.7;
-    const sourceData = normalizeSource(data ?? heatMapData);
+    const sourceData = normalizeSource(data ?? heatMapDataRef.current);
     if (!sourceData || sourceData.length === 0) return;
 
     const existingOverlays = canvas.getObjects().filter((o: any) => o.isHeatmapOverlay);
@@ -160,15 +178,14 @@ function HeatmapView({
 
     canvas.getObjects().forEach((obj: any) => {
       try {
-        const isZone = Boolean(obj.isZone || obj.zoneId || obj.zoneGroup);
-        if (!isZone) return;
+        if (!isZoneObject(obj)) return;
         let shape: any = obj;
         if (obj.type === "group" && typeof obj.getObjects === "function") {
           shape = obj.getObjects().find((c: any) => c.type !== "text") ?? obj;
         }
 
-        const zid = String(obj.zoneId ?? obj.id ?? "");
-        const zoneName = (obj as any).zoneName ?? (obj as any).labelText ?? `Zone ${zid}`;
+        const zid = getZoneId(obj);
+        const zoneName = getZoneName(obj);
         const count = countMap.get(zid) ?? null;
         const hasNumericCount = count !== null && Number.isFinite(count);
 
@@ -305,7 +322,7 @@ function HeatmapView({
       });
       canvas.requestRenderAll();
     }).catch((err) => console.error("Failed to create heatmap overlay:", err));
-  };
+  }, [editor]);
 
   const setDottedGridBackground = () => {
     if (!editor) return;
@@ -406,16 +423,23 @@ function HeatmapView({
           } catch { }
         }
         editor.canvas.requestRenderAll();
-        try {
-          setTimeout(() => {
-            try { applyHeatmap(); } catch { }
-          }, 50);
-        } catch { }
+        layoutLoadedRef.current = true;
+        setTimeout(() => {
+          try { applyHeatmap(heatMapDataRef.current); } catch { }
+        }, 50);
       });
     } catch (e) {
       console.error("Failed to load layout into canvas:", e);
     }
-  }, [editor, layout]);
+  }, [editor, layout, applyHeatmap]);
+
+  // Re-apply heatmap whenever data changes and layout is already loaded
+  useEffect(() => {
+    heatMapDataRef.current = heatMapData;
+    if (layoutLoadedRef.current && heatMapData.length > 0) {
+      try { applyHeatmap(heatMapData); } catch { }
+    }
+  }, [heatMapData, applyHeatmap]);
 
   useEffect(() => {
     if (!editor?.canvas) return;
@@ -423,8 +447,7 @@ function HeatmapView({
     const handleMouseOver = (opt: any) => {
       const target = opt.target;
       if (!target) return;
-      const isZone = Boolean(target.isZone || target.zoneId || target.zoneGroup);
-      if (!isZone) return;
+      if (!isZoneObject(target)) return;
       const zoneData = (target as any).zoneData;
       if (!zoneData) return;
       const canvasEl = canvas.getElement();
@@ -443,8 +466,7 @@ function HeatmapView({
     const handleMouseOut = (opt: any) => {
       const target = opt.target;
       if (!target) return;
-      const isZone = Boolean(target.isZone || target.zoneId || target.zoneGroup);
-      if (!isZone) return;
+      if (!isZoneObject(target)) return;
       setTooltip((prev) => ({ ...prev, visible: false }));
     };
     const handleMouseMove = (opt: any) => {
@@ -495,8 +517,7 @@ function HeatmapView({
         const objs = canvas.getObjects().slice().reverse();
         for (const obj of objs) {
           try {
-            const isZone = Boolean((obj as any).isZone || (obj as any).zoneId);
-            if (!isZone) continue;
+            if (!isZoneObject(obj)) continue;
             if (obj.type === "group" && typeof (obj as any).getObjects === "function") {
               const child = (obj as any).getObjects().find((c: any) => c.type !== "text");
               if (child && typeof (child as any).containsPoint === "function") {
@@ -520,8 +541,8 @@ function HeatmapView({
           } catch { }
         }
         if (found) {
-          const zid = (found as any).zoneId ?? (found as any).id ?? null;
-          const zname = (found as any).zoneName ?? (found as any).labelText ?? null;
+          const zid = getZoneId(found) || null;
+          const zname = getZoneName(found) || null;
           setSelectedZone({ id: zid ? String(zid) : null, name: zname });
           try {
             const src = Array.isArray(heatMapData) ? heatMapData : (heatMapData as any)?.data ?? [];
@@ -575,8 +596,8 @@ function HeatmapView({
         return;
       }
       const data = response?.data || [];
+      heatMapDataRef.current = data;
       setHeatMapData(data);
-      try { applyHeatmap(data); } catch { }
     } finally {
       setLoading(false);
     }
@@ -603,8 +624,8 @@ function HeatmapView({
           return;
         }
         const data = response?.data || [];
+        heatMapDataRef.current = data;
         setHeatMapData(data);
-        try { applyHeatmap(data); } catch { }
       } finally {
         setLoading(false);
       }

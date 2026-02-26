@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { colors } from "@/config/theme";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
-import { WarehouseHeader, WarehouseIndoorPositioningTab } from "@/app/component/app-warehouse";
+import { WarehouseHeader, WarehouseIndoorPositioningTab, WarehousePassiveTrackingTab } from "@/app/component/app-warehouse";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { useExperienceState } from "@/hooks/useExperienceState";
@@ -11,6 +11,7 @@ import { useExperienceState } from "@/hooks/useExperienceState";
 // Tab configuration
 const TABS = {
   indoorPositioning: "Indoor Positioning",
+  passiveTracking: "Passive Tracking",
   railCam: "Rail Cam",
 } as const;
 
@@ -69,6 +70,11 @@ function WarehouseExperienceContent() {
             {/* Indoor Positioning Tab */}
             {activeTab === TABS.indoorPositioning && (
               <WarehouseIndoorPositioningTab accentColor={colors.warehouseAccent} />
+            )}
+
+            {/* Passive Tracking Tab */}
+            {activeTab === TABS.passiveTracking && (
+              <WarehousePassiveTrackingTab accentColor={colors.warehouseAccent} />
             )}
 
             {/* Rail Cam Tab - Placeholder */}
