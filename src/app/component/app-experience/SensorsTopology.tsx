@@ -20,11 +20,16 @@ function SensorsTopology({
   categoryConfig: Record<string, { label?: string }>;
 }) {
   const STALE_THRESHOLD_MS = 15000; // 15s — sensor is "stale" if no fresh data
+  const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
 
-  // Count sensors that have fresh data
-  const activeSensorCount = Array.from(connectedSensors.values()).filter(
-    (s) => Date.now() - s.lastReceivedAt.getTime() < STALE_THRESHOLD_MS
-  ).length;
+  const isVisibleSensor = (s: SensorLiveData) => {
+    if (Date.now() - s.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) return false;
+    const d = getDeviceForSensor(s.tin);
+    return !d || !HIDDEN_CATEGORIES.has(d.category);
+  };
+
+  // Count sensors that have fresh data (excluding hidden categories)
+  const activeSensorCount = Array.from(connectedSensors.values()).filter(isVisibleSensor).length;
 
   // Fixed positions for EVERY configured device — layout never shifts
   const sensorPositions = devices.map((device, i) => {
@@ -87,12 +92,23 @@ function SensorsTopology({
             const r = 5.5; // sensor circle radius
             const iconSize = 7; // logo size inside circle
 
+            const fields = sensorData.fields;
+            const fieldKeys = fields ? Object.keys(fields) : [];
+            const hasMultipleFields = fieldKeys.length > 1;
+            const allFieldsTooltip =
+              fieldKeys.length > 0
+                ? Object.entries(fields!)
+                    .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
+                    .join("\n")
+                : `${sensorData.value.toFixed(1)} ${sensorData.unit}`;
+
             return (
               <g
                 key={sensorPos.tin}
                 className="cursor-pointer"
                 onClick={() => device && onSelectDevice(device)}
               >
+                <title>{sensorData.displayName}\n{allFieldsTooltip}</title>
                 <circle cx={sensorPos.x} cy={sensorPos.y} r={r} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
                 {device?.icon ? (
                   <image
@@ -107,12 +123,32 @@ function SensorsTopology({
                 ) : (
                   <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
                 )}
-                <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.yellow} fontSize="3" fontWeight="bold">
-                  {sensorData.value.toFixed(1)}{sensorData.unit}
-                </text>
-                <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.2">
-                  {sensorData.displayName}
-                </text>
+                {hasMultipleFields && fieldKeys.length > 0 ? (
+                  <>
+                    <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
+                      {sensorData.displayName}
+                    </text>
+                    {fieldKeys.map((k, i) => {
+                      const v = fields![k]?.value;
+                      const label = k.replace(/_/g, " ");
+                      const y = sensorPos.y + r + 7.8 + i * 3.4;
+                      return (
+                        <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
+                          {label}: {v != null ? Number(v).toFixed(1) : "—"}
+                        </text>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
+                      {sensorData.displayName}
+                    </text>
+                    <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
+                      {sensorData.value.toFixed(1)}{sensorData.unit}
+                    </text>
+                  </>
+                )}
               </g>
             );
           })}
@@ -150,12 +186,13 @@ function SensorsTopology({
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Type</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Last Data</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Current Value</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>All values</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Trend (30s)</th>
                 </tr>
               </thead>
               <tbody>
                 {Array.from(connectedSensors.values())
-                  .filter((s) => Date.now() - s.lastReceivedAt.getTime() < STALE_THRESHOLD_MS)
+                  .filter(isVisibleSensor)
                   .map((sensor, idx) => {
                   const device = getDeviceForSensor(sensor.tin);
                   const history = sensor.history || [];
@@ -175,6 +212,16 @@ function SensorsTopology({
                       <td className="px-3 py-2">
                         <span className="text-base font-bold" style={{ color: colors.yellow }}>
                           {sensor.value.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? v.value : "—"}`).join("; ") : undefined}>
+                          {sensor.fields && Object.keys(sensor.fields).length > 1
+                            ? Object.entries(sensor.fields)
+                                .slice(1)
+                                .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
+                                .join("; ")
+                            : "—"}
                         </span>
                       </td>
                       <td className="px-3 py-2">
