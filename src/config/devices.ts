@@ -46,7 +46,7 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0006000002", displayName: "MQ6", category: "gas" },
   { tin: "SN0001000010", displayName: "Temp (BME680)", category: "temperature" },
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
-  { tin: "SN0007000002", displayName: "Light Intensity", category: "light" },
+  { tin: "SN0007000003", displayName: "Light Intensity", category: "light" },
   { tin: "SN0031000001", displayName: "Magnetometer", category: "magnetometer" },
   { tin: "SN0008000002", displayName: "Relay- 1 ch", category: "relay" },
   { tin: "SN0020000001", displayName: "Relay- 2 ch", category: "relay" },
