@@ -58,6 +58,8 @@ export interface SensorMetric {
   unit?: string;
   /** When metric is a color (e.g. Addressable RGB), hex string for display */
   rawValue?: string;
+  /** Metric name from API (e.g. "roll", "pitch") for multi-metric devices */
+  metric?: string;
 }
 
 export interface MetricRecord {
@@ -249,8 +251,9 @@ export const fetchSensorMetrics = async (
       return fail(metricsResult.error);
     }
     const metrics = metricsResult.data || [];
-    const grouped: Record<string, SensorMetric[]> = {};
     const icons: Record<string, string> = {};
+    /** For each TIN, keep latest row per metric (Metric name) so we get roll + pitch etc. */
+    const byTinAndMetric: Record<string, Record<string, { entry: MetricRecord; parsed: { value: number | null; unit: string }; valueIsColor: boolean }>> = {};
 
     metrics.forEach((entry) => {
       const tin = entry.Tin;
@@ -261,13 +264,25 @@ export const fetchSensorMetrics = async (
       const parsed = parseMetricValue(entry.Value);
       const valueIsColor = isColorMetric(entry.Metric, entry.Value);
       if (parsed.value === null && !valueIsColor) return;
-      const item: SensorMetric = {
+      const metricKey = (entry.Metric || "value").trim().toLowerCase() || "value";
+      const existing = byTinAndMetric[tin]?.[metricKey];
+      const entryTime = entry.Time ? new Date(entry.Time).getTime() : 0;
+      const existingTime = existing?.entry?.Time ? new Date(existing.entry.Time).getTime() : 0;
+      if (!existing || entryTime >= existingTime) {
+        if (!byTinAndMetric[tin]) byTinAndMetric[tin] = {};
+        byTinAndMetric[tin][metricKey] = { entry, parsed, valueIsColor };
+      }
+    });
+
+    const grouped: Record<string, SensorMetric[]> = {};
+    Object.entries(byTinAndMetric).forEach(([tin, perMetric]) => {
+      grouped[tin] = Object.entries(perMetric).map(([metricKey, { entry, parsed, valueIsColor }]) => ({
         timestamp: entry.Time || new Date().toISOString(),
         value: parsed.value ?? 0,
         unit: parsed.unit,
         ...(valueIsColor && entry.Value?.trim() && { rawValue: entry.Value.trim() }),
-      };
-      grouped[tin] = grouped[tin] ? [...grouped[tin], item] : [item];
+        metric: metricKey,
+      }));
     });
 
     return ok({ metrics: grouped, icons });

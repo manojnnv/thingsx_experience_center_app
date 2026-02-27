@@ -137,21 +137,32 @@ function SensorsPageContent() {
       }
 
       const deviceListWithReadings = deviceList.map((device) => {
-        const metrics = metricsByTin[device.tin];
+        const metrics = metricsByTin[device.tin] as (SensorMetric & { metric?: string })[] | undefined;
         const iconFromMetrics = iconsByTin[device.tin];
         const icon = device.icon ?? iconFromMetrics;
         const isLedOrRgb = device.category === "led" || device.category === "addressable_rgb";
         const colorMetric = isLedOrRgb && metrics?.length ? ([...metrics] as SensorMetric[]).reverse().find((m) => m.rawValue) : null;
         const lastReadingDisplay = colorMetric?.rawValue;
         if (metrics && metrics.length > 0) {
-          const latest = metrics[metrics.length - 1];
+          const withMetricNames = metrics.filter((m) => m.metric);
+          const fieldsFromMetrics =
+            withMetricNames.length > 0
+              ? Object.fromEntries(
+                  withMetricNames.map((m) => [
+                    m.metric!,
+                    { value: m.value, timestamp: m.timestamp },
+                  ])
+                )
+              : undefined;
+          const primary = metrics[0];
           return {
             ...device,
             icon,
-            lastReading: latest.value,
-            unit: latest.unit || device.unit,
-            lastReceivedAt: latest.timestamp ? new Date(latest.timestamp) : null,
+            lastReading: primary.value,
+            unit: primary.unit || device.unit,
+            lastReceivedAt: primary.timestamp ? new Date(primary.timestamp) : null,
             ...(lastReadingDisplay && { lastReadingDisplay }),
+            ...(fieldsFromMetrics && Object.keys(fieldsFromMetrics).length > 0 && { fields: fieldsFromMetrics }),
           };
         }
         return {
@@ -245,6 +256,8 @@ function SensorsPageContent() {
         timestamp: Date;
         category: string;
         displayName: string;
+        fields?: Record<string, { value: number; timestamp?: string }>;
+        valueDisplay?: string;
       }> = [];
 
       Object.entries(payload).forEach(([tin, metrics]) => {
@@ -254,19 +267,37 @@ function SensorsPageContent() {
         const category = config.category || "sensor";
         const catInfo = categoryConfig[category] || { label: "Sensor", unit: "" };
 
-        // Pick the first metric as the primary display value
         const metricEntries = Object.entries(metrics);
         if (metricEntries.length === 0) return;
+
+        // Build fields from all metrics (metric key → value + timestamp)
+        const fields: Record<string, { value: number; timestamp?: string }> = {};
+        metricEntries.forEach(([key, m]) => {
+          fields[key] = { value: m.value, timestamp: m.timestamp };
+        });
 
         const [, first] = metricEntries[0];
         const ts = new Date(first.timestamp);
 
-        // Fingerprint: value rounded to 2 decimals + timestamp
-        const fp = `${first.value.toFixed(2)}|${first.timestamp}`;
+        // Fingerprint: all metric keys + values so any change triggers update
+        const fpParts = Object.entries(metrics)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([, m]) => `${m.value.toFixed(4)}|${m.timestamp}`);
+        const fp = fpParts.join(";");
         nextFingerprints.set(tin, fp);
 
         if (lastValuesRef.current.get(tin) !== fp) {
           hasChanges = true;
+        }
+
+        // If any metric looks like a hex color (LED/RGB), use for valueDisplay
+        let valueDisplay: string | undefined;
+        for (const [, m] of metricEntries) {
+          const raw = String((m as any).value ?? "");
+          if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(raw.trim())) {
+            valueDisplay = raw.trim();
+            break;
+          }
         }
 
         newEntries.push({
@@ -276,6 +307,8 @@ function SensorsPageContent() {
           timestamp: ts,
           category,
           displayName: config.displayName || tin,
+          fields: Object.keys(fields).length > 0 ? fields : undefined,
+          valueDisplay,
         });
       });
 
@@ -305,10 +338,11 @@ function SensorsPageContent() {
             displayName: entry.displayName,
             category: entry.category,
             lastReceivedAt: entry.timestamp,
-            // Only append to history when the sensor is actively transmitting
             history: isActive
               ? [...history, entry.value].slice(-30)
               : history,
+            fields: entry.fields,
+            valueDisplay: entry.valueDisplay,
           });
         });
 

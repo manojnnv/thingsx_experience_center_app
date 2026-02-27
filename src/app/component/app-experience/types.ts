@@ -11,6 +11,14 @@ export type DisplayDevice = {
   lastReadingDisplay?: string;
   /** Icon from API (URL) or category icon key from config */
   icon?: string;
+  /** Latest value per metric from Metrics API (e.g. roll, pitch) when no live data yet */
+  fields?: Record<string, SensorLiveDataField>;
+};
+
+/** One metric from latest_data (value + optional timestamp) */
+export type SensorLiveDataField = {
+  value: number;
+  timestamp?: string;
 };
 
 export type SensorLiveData = {
@@ -23,6 +31,8 @@ export type SensorLiveData = {
   history: number[];
   /** When sensor is Addressable RGB/LED, hex color for display */
   valueDisplay?: string;
+  /** All metrics returned by the API (metric key → value + timestamp). Primary value/unit are from the first. */
+  fields?: Record<string, SensorLiveDataField>;
 };
 
 export type EPDFieldValues = {

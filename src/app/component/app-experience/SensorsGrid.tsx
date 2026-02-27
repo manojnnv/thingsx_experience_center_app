@@ -47,11 +47,22 @@ function SensorsGrid({
             displayValue !== null && displayValue !== undefined
               ? `${displayValue.toFixed(1)} ${displayUnit}`.trim()
               : "--";
+          const fields = liveData?.fields ?? device.fields;
+          const fieldKeys = fields ? Object.keys(fields) : [];
+          const hasMultipleFields = fieldKeys.length > 1;
+          const allFieldsList =
+            fieldKeys.length > 0
+              ? fieldKeys.map((k) => {
+                  const v = fields![k]?.value;
+                  const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                  return { label, value: v != null ? Number(v).toFixed(1) : "—" };
+                })
+              : [];
           return (
             <button
               key={device.tin}
               onClick={() => onSelectDevice(device)}
-              className="group relative p-4 rounded-xl transition-all duration-300 text-left flex flex-col min-h-[120px]"
+              className={`group relative p-4 rounded-xl transition-all duration-300 text-left flex flex-col overflow-visible ${hasMultipleFields ? "min-h-[140px]" : "min-h-[120px]"}`}
               style={{
                 backgroundColor: selectedDevice?.tin === device.tin ? `${colors.yellow}15` : colors.backgroundCard,
                 border: `1px solid ${selectedDevice?.tin === device.tin ? colors.yellow : colors.border}`,
@@ -59,7 +70,7 @@ function SensorsGrid({
               }}
             >
               {/* Row 1: icon (top-left) + latest data (large value) */}
-              <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-start justify-between gap-2 mb-2 overflow-visible min-h-0">
                 <div
                   className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
                   style={{ backgroundColor: `${colors.yellow}15` }}
@@ -97,6 +108,15 @@ function SensorsGrid({
                     <span className="text-lg font-bold truncate" style={{ color: colors.yellow }}>
                       {colorDisplay}
                     </span>
+                  </div>
+                ) : hasMultipleFields && allFieldsList.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 min-w-0 text-right shrink-0 overflow-visible">
+                    {allFieldsList.map(({ label, value }) => (
+                      <div key={label} className="flex items-baseline justify-end gap-2">
+                        <span className="text-sm shrink-0" style={{ color: colors.textMuted }}>{label}:</span>
+                        <span className="text-lg font-bold tabular-nums" style={{ color: colors.yellow }}>{value}</span>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <span className="text-2xl font-bold tabular-nums truncate" style={{ color: colors.yellow }}>
