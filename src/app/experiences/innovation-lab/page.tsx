@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+
 import { colors } from "@/config/theme";
 
 // Roadmap stage labels (from reference image)
@@ -216,13 +216,11 @@ export default function InnovationLabPage() {
                   )}
                 </div>
                 {/* Right: stage diagram image */}
-                <div className="relative min-h-[200px] lg:min-h-0 lg:flex-1 rounded-xl overflow-hidden order-1 lg:order-2" style={{ backgroundColor: colors.backgroundElevated }}>
-                  <Image
+                <div className="relative min-h-[200px] lg:min-h-0 lg:flex-1 rounded-xl overflow-hidden order-1 lg:order-2 flex items-center justify-center" style={{ backgroundColor: colors.backgroundElevated }}>
+                  <img
                     src={END_TO_END_JOURNEY_IMAGES[selectedJourneyStage].src}
                     alt={END_TO_END_JOURNEY_IMAGES[selectedJourneyStage].label}
-                    fill
-                    className="object-contain p-3"
-                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-contain p-3 w-full h-full"
                   />
                 </div>
               </div>
