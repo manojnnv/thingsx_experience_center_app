@@ -42,16 +42,19 @@ function SensorsGrid({
           const liveData = connectedSensors.get(device.tin);
           const colorDisplay = liveData?.valueDisplay ?? device.lastReadingDisplay;
           const isColorTile = (device.category === "led" || device.category === "addressable_rgb") && colorDisplay && /^#([0-9A-Fa-f]{3}){1,2}$/.test(colorDisplay);
-          const rawDisplayValue = liveData?.value ?? device.lastReading;
           const displayOpts = { category: device.category };
+          const lkg = liveData?.history?.length ? liveData.history[liveData.history.length - 1] : null;
+          const rawDisplayValue = liveData
+            ? (liveData.value ?? lkg)
+            : device.lastReading;
           const displayValue =
             rawDisplayValue !== null && rawDisplayValue !== undefined
-              ? sanitizeSensorValue(Number(rawDisplayValue) || 0, displayOpts)
+              ? (liveData ? rawDisplayValue : sanitizeSensorValue(Number(rawDisplayValue) || 0, displayOpts))
               : null;
           const displayUnit = liveData?.unit ?? device.unit;
           const latestData =
             displayValue !== null
-              ? `${displayValue.toFixed(1)} ${displayUnit}`.trim()
+              ? `${Number(displayValue).toFixed(1)} ${displayUnit}`.trim()
               : "--";
           const fields = liveData?.fields ?? device.fields;
           const fieldKeys = fields ? Object.keys(fields) : [];

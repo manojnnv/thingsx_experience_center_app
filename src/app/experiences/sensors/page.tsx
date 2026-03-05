@@ -16,6 +16,7 @@ import {
   fetchSensorMetrics,
   fetchLatestSensorData,
   sanitizeSensorValue,
+  isValidSensorReading,
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
@@ -230,7 +231,7 @@ function SensorsPageContent() {
 
       const newEntries: Array<{
         tin: string;
-        value: number;
+        value: number | null;
         unit: string;
         timestamp: Date;
         category: string;
@@ -250,28 +251,33 @@ function SensorsPageContent() {
         if (metricEntries.length === 0) return;
 
         const sanitizeOpts = { category, metric: "" };
-        // Build fields from all metrics (metric key → value + timestamp), sanitize ghost values
-        const fields: Record<string, { value: number; timestamp?: string }> = {};
         const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v));
+        // Build fields: valid → sanitized value; invalid → 0 for storage (display can use LKG per field later)
+        const fields: Record<string, { value: number; timestamp?: string }> = {};
         metricEntries.forEach(([key, m]) => {
           const rawVal = toNum((m as { value?: unknown }).value);
-          const value = sanitizeSensorValue(Number.isFinite(rawVal) ? rawVal : 0, { ...sanitizeOpts, metric: key });
+          const numVal = Number.isFinite(rawVal) ? rawVal : 0;
+          const value = isValidSensorReading(numVal, { ...sanitizeOpts, metric: key })
+            ? sanitizeSensorValue(numVal, { ...sanitizeOpts, metric: key })
+            : 0;
           fields[key] = { value, timestamp: m.timestamp };
         });
 
         const [firstKey, first] = metricEntries[0];
         const firstRaw = toNum((first as { value?: unknown }).value);
-        const primaryValue = sanitizeSensorValue(
-          Number.isFinite(firstRaw) ? firstRaw : 0,
-          { ...sanitizeOpts, metric: firstKey }
-        );
+        const firstNum = Number.isFinite(firstRaw) ? firstRaw : 0;
+        const primaryValid = isValidSensorReading(firstNum, { ...sanitizeOpts, metric: firstKey });
+        const primaryValue: number | null = primaryValid
+          ? sanitizeSensorValue(firstNum, { ...sanitizeOpts, metric: firstKey })
+          : null;
         const ts = new Date(first.timestamp);
 
-        // Fingerprint: sanitized values so ghost→0 doesn't cause churn
+        // Fingerprint: use "invalid" for primary when null so we don't churn
         const fpParts = Object.entries(fields)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([, f]) => `${f.value.toFixed(4)}|${f.timestamp ?? ""}`);
-        const fp = fpParts.join(";");
+          .map(([, f]) => `${f.value.toFixed(4)}|${first.timestamp}`);
+        const primaryFp = primaryValue !== null ? primaryValue.toFixed(4) : "invalid";
+        const fp = `${primaryFp}|${first.timestamp};${fpParts.join(";")}`;
         nextFingerprints.set(tin, fp);
 
         if (lastValuesRef.current.get(tin) !== fp) {
@@ -318,6 +324,11 @@ function SensorsPageContent() {
           const existing = prev.get(entry.tin);
           const history = existing?.history || [];
           const isActive = now - entry.timestamp.getTime() < STALE_THRESHOLD_MS;
+          // Only append to history when the current reading is valid so trends stay correct
+          const newHistory =
+            isActive && entry.value !== null
+              ? [...history, entry.value].slice(-30)
+              : history;
 
           updated.set(entry.tin, {
             tin: entry.tin,
@@ -326,9 +337,7 @@ function SensorsPageContent() {
             displayName: entry.displayName,
             category: entry.category,
             lastReceivedAt: entry.timestamp,
-            history: isActive
-              ? [...history, entry.value].slice(-30)
-              : history,
+            history: newHistory,
             fields: entry.fields,
             valueDisplay: entry.valueDisplay,
           });
@@ -345,12 +354,13 @@ function SensorsPageContent() {
           if (!entry) return device;
           const isActive = now - entry.timestamp.getTime() < STALE_THRESHOLD_MS;
           const newStatus = isActive ? "online" : "offline";
-          if (device.status !== newStatus || device.lastReading !== entry.value) {
+          const lastReading = entry.value !== null ? entry.value : device.lastReading;
+          if (device.status !== newStatus || device.lastReading !== lastReading) {
             changed = true;
             return {
               ...device,
               status: newStatus as "online" | "offline",
-              lastReading: entry.value,
+              lastReading,
               unit: entry.unit || device.unit,
               lastReceivedAt: entry.timestamp,
             };
