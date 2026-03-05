@@ -10,27 +10,23 @@ import {
   categoryConfig,
   categoryToLogo,
   LOGOS_BASE,
-  sensorEPDDevices,
-  epdColorMap,
-  EPDConfig,
 } from "@/config/devices";
 import {
   fetchDevicesByDeviceCodes,
   fetchSensorMetrics,
   fetchLatestSensorData,
+  sanitizeSensorValue,
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
-import { updateEPDValue, bulkUpdateEPD, BulkUpdatePayload } from "@/app/services/epd/epd";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import SensorsHeader from "@/app/component/app-experience/SensorsHeader";
 import SensorsLoading from "@/app/component/app-experience/SensorsLoading";
 import SensorsGrid from "@/app/component/app-experience/SensorsGrid";
 import SensorsTopology from "@/app/component/app-experience/SensorsTopology";
-import SensorsEpdControl from "@/app/component/app-experience/SensorsEpdControl";
 import SensorsSelectedDevicePanel from "@/app/component/app-experience/SensorsSelectedDevicePanel";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
-import type { DisplayDevice, SensorLiveData, EPDFieldValues } from "@/app/component/app-experience/types";
+import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experience/types";
 
 // Constants
 const POLL_INTERVAL_MS = 3000; // Poll live data every 3 seconds
@@ -39,7 +35,6 @@ const STALE_THRESHOLD_MS = 15000; // Sensor considered inactive if no data in 15
 const TABS = {
   grid: "Component Matrix",
   topology: "Live Topology",
-  epd: "EPD Control",
 } as const;
 
 const TABS_ARRAY = Object.values(TABS);
@@ -62,10 +57,6 @@ function SensorsPageContent() {
   const [connectedSensors, setConnectedSensors] = useState<Map<string, SensorLiveData>>(new Map());
   // Snapshot of last committed values — avoids re-renders when API returns the same data
   const lastValuesRef = useRef<Map<string, string>>(new Map());
-
-  // EPD state
-  const [epdValues, setEpdValues] = useState<EPDFieldValues>({});
-  const [updating, setUpdating] = useState(false);
 
   // Ref to track when we're intentionally closing the sheet (to prevent race condition)
   const isClosingRef = useRef(false);
@@ -219,18 +210,6 @@ function SensorsPageContent() {
     setDeviceParam(null);
   };
 
-  // Initialize EPD values
-  useEffect(() => {
-    const initialValues: EPDFieldValues = {};
-    sensorEPDDevices.forEach((epd) => {
-      initialValues[epd.tin] = {};
-      epd.fields.forEach((field) => {
-        initialValues[epd.tin][field.key] = field.defaultValue ?? "";
-      });
-    });
-    setEpdValues(initialValues);
-  }, []);
-
   // ─── Live Topology Polling ───────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== TABS.topology || showVideo || devices.length === 0) return;
@@ -270,19 +249,28 @@ function SensorsPageContent() {
         const metricEntries = Object.entries(metrics);
         if (metricEntries.length === 0) return;
 
-        // Build fields from all metrics (metric key → value + timestamp)
+        const sanitizeOpts = { category, metric: "" };
+        // Build fields from all metrics (metric key → value + timestamp), sanitize ghost values
         const fields: Record<string, { value: number; timestamp?: string }> = {};
+        const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v));
         metricEntries.forEach(([key, m]) => {
-          fields[key] = { value: m.value, timestamp: m.timestamp };
+          const rawVal = toNum((m as { value?: unknown }).value);
+          const value = sanitizeSensorValue(Number.isFinite(rawVal) ? rawVal : 0, { ...sanitizeOpts, metric: key });
+          fields[key] = { value, timestamp: m.timestamp };
         });
 
-        const [, first] = metricEntries[0];
+        const [firstKey, first] = metricEntries[0];
+        const firstRaw = toNum((first as { value?: unknown }).value);
+        const primaryValue = sanitizeSensorValue(
+          Number.isFinite(firstRaw) ? firstRaw : 0,
+          { ...sanitizeOpts, metric: firstKey }
+        );
         const ts = new Date(first.timestamp);
 
-        // Fingerprint: all metric keys + values so any change triggers update
-        const fpParts = Object.entries(metrics)
+        // Fingerprint: sanitized values so ghost→0 doesn't cause churn
+        const fpParts = Object.entries(fields)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([, m]) => `${m.value.toFixed(4)}|${m.timestamp}`);
+          .map(([, f]) => `${f.value.toFixed(4)}|${f.timestamp ?? ""}`);
         const fp = fpParts.join(";");
         nextFingerprints.set(tin, fp);
 
@@ -302,7 +290,7 @@ function SensorsPageContent() {
 
         newEntries.push({
           tin,
-          value: first.value,
+          value: primaryValue,
           unit: catInfo.unit,
           timestamp: ts,
           category,
@@ -383,24 +371,6 @@ function SensorsPageContent() {
     };
   }, [activeTab, showVideo, devices.length]); // devices.length so we re-run once devices load
 
-  // EPD handlers
-  const handleEPDFieldChange = (tin: string, fieldKey: string, value: string | number) => {
-    setEpdValues((prev) => ({
-      ...prev,
-      [tin]: { ...prev[tin], [fieldKey]: value },
-    }));
-  };
-
-  const handleUpdateSingleEPD = async (epd: EPDConfig) => {
-    setUpdating(true);
-    try {
-      const values = epdValues[epd.tin] || {};
-      await updateEPDValue(epd.tin, values);
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   const getDeviceForSensor = (tin: string) => devices.find((d) => d.tin === tin);
 
   // Show minimal loading state until localStorage check is complete
@@ -462,18 +432,6 @@ function SensorsPageContent() {
                 categoryConfig={categoryConfig}
               />
             </div>
-          )}
-
-          {/* EPD Control */}
-          {!loading && activeTab === TABS.epd && (
-            <SensorsEpdControl
-              sensorEPDDevices={sensorEPDDevices}
-              epdColorMap={epdColorMap}
-              epdValues={epdValues}
-              updating={updating}
-              onEPDFieldChange={handleEPDFieldChange}
-              onUpdateSingleEPD={handleUpdateSingleEPD}
-            />
           )}
         </main>
 
