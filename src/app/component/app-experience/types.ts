@@ -23,11 +23,13 @@ export type SensorLiveDataField = {
 
 export type SensorLiveData = {
   tin: string;
-  value: number;
+  /** Latest reading; null when last reading was invalid (ghost). Use last-known-good from history in UI. */
+  value: number | null;
   unit: string;
   displayName: string;
   category: string;
   lastReceivedAt: Date;
+  /** Only valid readings; invalid ones are not appended so trends stay correct. */
   history: number[];
   /** When sensor is Addressable RGB/LED, hex color for display */
   valueDisplay?: string;

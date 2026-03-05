@@ -134,21 +134,40 @@ const normalizeCategoryKey = (deviceType?: string): string => {
     .replace(/^_+|_+$/g, "");
 };
 
+/** Threshold above which a value is treated as invalid (type-casting ghost). */
+const GHOST_THRESHOLD = 1e10;
+
 /**
- * Sanity-check sensor values to avoid "type casting ghost" numbers (e.g. ASCII "E@@" interpreted as double).
- * - Non-finite (NaN, Infinity) → 0
- * - Absurdly large values (e.g. > 1e10) → 0 (likely string bytes cast to number)
- * - Light/lux: clip to 0–100000 (physical range for typical indoor sensors)
+ * Returns true if the raw reading is valid (finite, within bounds). Use this to decide whether to store and to append to history.
+ */
+export function isValidSensorReading(
+  value: number,
+  options?: { category?: string; metric?: string }
+): boolean {
+  if (value == null || !Number.isFinite(value)) return false;
+  if (Math.abs(value) > GHOST_THRESHOLD) return false;
+  const isLight =
+    options?.category === "light" ||
+    (options?.metric && /lux|light|intensity/i.test(options.metric ?? ""));
+  if (isLight) {
+    if (value < 0 || value > 100000) return false;
+  }
+  return true;
+}
+
+/**
+ * Sanity-check sensor values: return a displayable number (clips light to 0–100000).
+ * Only call when isValidSensorReading is true; for invalid readings store null and use last-known-good in UI.
  */
 export function sanitizeSensorValue(
   value: number,
   options?: { category?: string; metric?: string }
 ): number {
   if (value == null || !Number.isFinite(value)) return 0;
-  if (Math.abs(value) > 1e10) return 0;
+  if (Math.abs(value) > GHOST_THRESHOLD) return 0;
   const isLight =
     options?.category === "light" ||
-    (options?.metric && /lux|light|intensity/i.test(options.metric));
+    (options?.metric && /lux|light|intensity/i.test(options.metric ?? ""));
   if (isLight) {
     if (value < 0) return 0;
     if (value > 100000) return 100000;
