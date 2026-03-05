@@ -98,8 +98,8 @@ function SensorsTopology({
             const allFieldsTooltip =
               fieldKeys.length > 0
                 ? Object.entries(fields!)
-                    .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
-                    .join("\n")
+                  .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
+                  .join("\n")
                 : `${sensorData.value.toFixed(1)} ${sensorData.unit}`;
 
             return (
@@ -194,55 +194,55 @@ function SensorsTopology({
                 {Array.from(connectedSensors.values())
                   .filter(isVisibleSensor)
                   .map((sensor, idx) => {
-                  const device = getDeviceForSensor(sensor.tin);
-                  const history = sensor.history || [];
-                  const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
-                  const timeSinceData = Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000);
+                    const device = getDeviceForSensor(sensor.tin);
+                    const history = sensor.history || [];
+                    const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
+                    const timeSinceData = Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000);
 
-                  return (
-                    <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
-                      <td className="px-3 py-2">
-                        <div>
-                          <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
-                          <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
-                      <td className="px-3 py-2"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
-                      <td className="px-3 py-2">
-                        <span className="text-base font-bold" style={{ color: colors.yellow }}>
-                          {sensor.value.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? v.value : "—"}`).join("; ") : undefined}>
-                          {sensor.fields && Object.keys(sensor.fields).length > 1
-                            ? Object.entries(sensor.fields)
+                    return (
+                      <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
+                        <td className="px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
+                            <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
+                        <td className="px-3 py-2"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
+                        <td className="px-3 py-2">
+                          <span className="text-base font-bold" style={{ color: colors.yellow }}>
+                            {sensor.value.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? v.value : "—"}`).join("; ") : undefined}>
+                            {sensor.fields && Object.keys(sensor.fields).length > 1
+                              ? Object.entries(sensor.fields)
                                 .slice(1)
                                 .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
                                 .join("; ")
-                            : "—"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-20 flex items-end gap-px">
-                            {history.slice(-15).map((val, i) => {
-                              const min = Math.min(...history);
-                              const max = Math.max(...history);
-                              const range = max - min || 1;
-                              const height = ((val - min) / range) * 100;
-                              return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
-                            })}
-                          </div>
-                          <span className="text-xs font-medium flex items-center" style={{ color: trend > 0 ? colors.primary : trend < 0 ? "#ff6b6b" : colors.textMuted }}>
-                            {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{Math.abs(trend).toFixed(1)}
+                              : "—"}
                           </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-20 flex items-end gap-px">
+                              {history.slice(-15).map((val, i) => {
+                                const min = Math.min(...history);
+                                const max = Math.max(...history);
+                                const range = max - min || 1;
+                                const height = ((val - min) / range) * 100;
+                                return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
+                              })}
+                            </div>
+                            <span className="text-xs font-medium flex items-center" style={{ color: trend > 0 ? colors.primary : trend < 0 ? "#ff6b6b" : colors.textMuted }}>
+                              {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{Math.abs(trend).toFixed(1)}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
