@@ -15,12 +15,14 @@ interface UseExperienceStateOptions {
 }
 
 interface UseExperienceStateReturn {
-    /** Whether the hook has finished initializing (localStorage check complete) */
+    /** Whether the hook has finished initializing (sessionStorage check complete) */
     isReady: boolean;
     /** Whether to show the video intro */
     showVideo: boolean;
     /** Skip the video intro and mark as seen */
     skipVideo: () => void;
+    /** Replay the video intro (clears the session flag) */
+    replayIntro: () => void;
     /** Currently active tab */
     activeTab: string;
     /** Change the active tab (updates URL) */
@@ -29,9 +31,9 @@ interface UseExperienceStateReturn {
 
 /**
  * Hook to manage experience page state with persistence.
- * - Video intro skip status is stored in localStorage
+ * - Video intro skip status is stored in sessionStorage (resets per tab/session)
  * - Active tab is stored in URL query params for deep linking (uses useSetQueryParam)
- * - Returns isReady=false until localStorage check is complete to prevent flash
+ * - Returns isReady=false until sessionStorage check is complete to prevent flash
  */
 export function useExperienceState({
     pageKey,
@@ -44,26 +46,32 @@ export function useExperienceState({
     // Determine active tab from URL or use default
     const activeTab = tabParam && tabs.includes(tabParam) ? tabParam : defaultTab;
 
-    // Track if we've finished checking localStorage
+    // Track if we've finished checking sessionStorage
     const [isReady, setIsReady] = useState(false);
 
-    // Start with showVideo=true, will be updated after localStorage check
+    // Start with showVideo=true, will be updated after sessionStorage check
     const [showVideo, setShowVideo] = useState(true);
 
-    // Check localStorage AFTER hydration to avoid server/client mismatch
+    // Check sessionStorage AFTER hydration to avoid server/client mismatch
     useEffect(() => {
-        const seen = localStorage.getItem(`${INTRO_SEEN_PREFIX}${pageKey}`);
+        const seen = sessionStorage.getItem(`${INTRO_SEEN_PREFIX}${pageKey}`);
         if (seen === "true") {
             setShowVideo(false);
         }
-        // Mark as ready after localStorage check
+        // Mark as ready after sessionStorage check
         setIsReady(true);
     }, [pageKey]);
 
-    // Skip video and persist to localStorage
+    // Skip video and persist to sessionStorage
     const skipVideo = useCallback(() => {
         setShowVideo(false);
-        localStorage.setItem(`${INTRO_SEEN_PREFIX}${pageKey}`, "true");
+        sessionStorage.setItem(`${INTRO_SEEN_PREFIX}${pageKey}`, "true");
+    }, [pageKey]);
+
+    // Replay intro: clear session flag and re-show
+    const replayIntro = useCallback(() => {
+        sessionStorage.removeItem(`${INTRO_SEEN_PREFIX}${pageKey}`);
+        setShowVideo(true);
     }, [pageKey]);
 
     // Set active tab (wraps the setTabParam for type consistency)
@@ -78,6 +86,7 @@ export function useExperienceState({
         isReady,
         showVideo,
         skipVideo,
+        replayIntro,
         activeTab,
         setActiveTab,
     };

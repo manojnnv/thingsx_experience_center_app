@@ -41,7 +41,7 @@ function RetailExperienceContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Page state with persistence
-  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
     pageKey: "retail",
     tabs: TABS_ARRAY,
     defaultTab: TABS.stream,
@@ -279,6 +279,7 @@ function RetailExperienceContent() {
           onTabChange={(tab) => setActiveTab(tab)}
           accentColor={accent}
           activeTab={activeTab}
+          onReplayIntro={replayIntro}
         />
 
         {/* Content */}

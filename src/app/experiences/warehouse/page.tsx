@@ -18,7 +18,7 @@ const TABS = {
 const TABS_ARRAY = Object.values(TABS);
 
 function WarehouseExperienceContent() {
-  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
     pageKey: "warehouse",
     tabs: TABS_ARRAY,
     defaultTab: TABS.indoorPositioning,
@@ -53,9 +53,8 @@ function WarehouseExperienceContent() {
 
         {/* Main Content */}
         <div
-          className={`flex flex-col h-screen ${
-            showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"
-          }`}
+          className={`flex flex-col h-screen ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"
+            }`}
         >
           <WarehouseHeader
             tabs={TABS_ARRAY}
@@ -63,6 +62,7 @@ function WarehouseExperienceContent() {
             onTabChange={(tab) => setActiveTab(tab)}
             accentColor={colors.warehouseAccent}
             activeTab={activeTab}
+            onReplayIntro={replayIntro}
           />
 
           {/* Content Area */}

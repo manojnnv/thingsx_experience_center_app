@@ -47,6 +47,7 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0001000010", displayName: "Temp (BME680)", category: "temperature" },
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
   { tin: "SN0007000003", displayName: "Light Intensity", category: "light" },
+  { tin: "SN0023000001", displayName: "DPS310", category: "pressure" },
   { tin: "SN0031000001", displayName: "Magnetometer", category: "magnetometer" },
   { tin: "SN0008000002", displayName: "Relay- 1 ch", category: "relay" },
   { tin: "SN0020000001", displayName: "Relay- 2 ch", category: "relay" },
@@ -173,72 +174,96 @@ export interface ESLFieldConfig {
 export const retailESLDevices: ESLConfig[] = [
   // TODO: Replace with your real ESL TINs
   // Row 1 - Top Shelf
-  { tin: "ESL-RETAIL-001", displayName: "Shelf 1 - Label 1", size: "small", color: "black", width: 152, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Organic Almonds" },
-    { key: "price", label: "Price", type: "price", defaultValue: "12.99" },
-    { key: "sku", label: "SKU", type: "text", defaultValue: "ALM-001" },
-  ]},
-  { tin: "ESL-RETAIL-002", displayName: "Shelf 1 - Label 2", size: "small", color: "black", width: 152, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Greek Yogurt" },
-    { key: "price", label: "Price", type: "price", defaultValue: "4.99" },
-    { key: "sku", label: "SKU", type: "text", defaultValue: "YOG-002" },
-  ]},
-  { tin: "ESL-RETAIL-003", displayName: "Shelf 1 - Label 3", size: "small", color: "red", width: 152, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Energy Bars" },
-    { key: "price", label: "Price", type: "price", defaultValue: "2.49" },
-    { key: "sku", label: "SKU", type: "text", defaultValue: "BAR-003" },
-  ]},
-  { tin: "ESL-RETAIL-004", displayName: "Shelf 1 - Label 4", size: "small", color: "black", width: 152, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Coconut Water" },
-    { key: "price", label: "Price", type: "price", defaultValue: "3.49" },
-    { key: "sku", label: "SKU", type: "text", defaultValue: "COC-004" },
-  ]},
+  {
+    tin: "ESL-RETAIL-001", displayName: "Shelf 1 - Label 1", size: "small", color: "black", width: 152, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Organic Almonds" },
+      { key: "price", label: "Price", type: "price", defaultValue: "12.99" },
+      { key: "sku", label: "SKU", type: "text", defaultValue: "ALM-001" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-002", displayName: "Shelf 1 - Label 2", size: "small", color: "black", width: 152, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Greek Yogurt" },
+      { key: "price", label: "Price", type: "price", defaultValue: "4.99" },
+      { key: "sku", label: "SKU", type: "text", defaultValue: "YOG-002" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-003", displayName: "Shelf 1 - Label 3", size: "small", color: "red", width: 152, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Energy Bars" },
+      { key: "price", label: "Price", type: "price", defaultValue: "2.49" },
+      { key: "sku", label: "SKU", type: "text", defaultValue: "BAR-003" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-004", displayName: "Shelf 1 - Label 4", size: "small", color: "black", width: 152, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Coconut Water" },
+      { key: "price", label: "Price", type: "price", defaultValue: "3.49" },
+      { key: "sku", label: "SKU", type: "text", defaultValue: "COC-004" },
+    ]
+  },
   // Row 2 - Middle Shelf
-  { tin: "ESL-RETAIL-005", displayName: "Shelf 2 - Label 1", size: "medium", color: "yellow", width: 296, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Premium Coffee" },
-    { key: "price", label: "Price", type: "price", defaultValue: "18.99" },
-    { key: "original_price", label: "Original Price", type: "price", defaultValue: "24.99" },
-    { key: "promo", label: "Promo", type: "text", defaultValue: "25% OFF" },
-  ]},
-  { tin: "ESL-RETAIL-006", displayName: "Shelf 2 - Label 2", size: "medium", color: "black", width: 296, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Green Tea" },
-    { key: "price", label: "Price", type: "price", defaultValue: "8.99" },
-    { key: "description", label: "Description", type: "text", defaultValue: "100 bags" },
-  ]},
-  { tin: "ESL-RETAIL-007", displayName: "Shelf 2 - Label 3", size: "medium", color: "red", width: 296, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Protein Powder" },
-    { key: "price", label: "Price", type: "price", defaultValue: "29.99" },
-    { key: "promo", label: "Promo", type: "text", defaultValue: "NEW!" },
-  ]},
-  { tin: "ESL-RETAIL-008", displayName: "Shelf 2 - Label 4", size: "medium", color: "black", width: 296, height: 152, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Honey" },
-    { key: "price", label: "Price", type: "price", defaultValue: "7.49" },
-    { key: "description", label: "Description", type: "text", defaultValue: "Raw & Organic" },
-  ]},
+  {
+    tin: "ESL-RETAIL-005", displayName: "Shelf 2 - Label 1", size: "medium", color: "yellow", width: 296, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Premium Coffee" },
+      { key: "price", label: "Price", type: "price", defaultValue: "18.99" },
+      { key: "original_price", label: "Original Price", type: "price", defaultValue: "24.99" },
+      { key: "promo", label: "Promo", type: "text", defaultValue: "25% OFF" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-006", displayName: "Shelf 2 - Label 2", size: "medium", color: "black", width: 296, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Green Tea" },
+      { key: "price", label: "Price", type: "price", defaultValue: "8.99" },
+      { key: "description", label: "Description", type: "text", defaultValue: "100 bags" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-007", displayName: "Shelf 2 - Label 3", size: "medium", color: "red", width: 296, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Protein Powder" },
+      { key: "price", label: "Price", type: "price", defaultValue: "29.99" },
+      { key: "promo", label: "Promo", type: "text", defaultValue: "NEW!" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-008", displayName: "Shelf 2 - Label 4", size: "medium", color: "black", width: 296, height: 152, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Honey" },
+      { key: "price", label: "Price", type: "price", defaultValue: "7.49" },
+      { key: "description", label: "Description", type: "text", defaultValue: "Raw & Organic" },
+    ]
+  },
   // Row 3 - Bottom Shelf
-  { tin: "ESL-RETAIL-009", displayName: "Shelf 3 - Label 1", size: "large", color: "yellow", width: 400, height: 300, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Vitamin Bundle" },
-    { key: "description", label: "Description", type: "text", defaultValue: "Complete daily nutrition" },
-    { key: "price", label: "Price", type: "price", defaultValue: "34.99" },
-    { key: "original_price", label: "Original Price", type: "price", defaultValue: "49.99" },
-    { key: "promo", label: "Promo", type: "text", defaultValue: "BEST SELLER" },
-  ]},
-  { tin: "ESL-RETAIL-010", displayName: "Shelf 3 - Label 2", size: "large", color: "black", width: 400, height: 300, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Omega-3 Fish Oil" },
-    { key: "description", label: "Description", type: "text", defaultValue: "Heart health support" },
-    { key: "price", label: "Price", type: "price", defaultValue: "19.99" },
-  ]},
-  { tin: "ESL-RETAIL-011", displayName: "Shelf 3 - Label 3", size: "large", color: "red", width: 400, height: 300, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Multivitamin Pack" },
-    { key: "description", label: "Description", type: "text", defaultValue: "30 day supply" },
-    { key: "price", label: "Price", type: "price", defaultValue: "24.99" },
-    { key: "promo", label: "Promo", type: "text", defaultValue: "BUY 2 GET 1" },
-  ]},
-  { tin: "ESL-RETAIL-012", displayName: "Shelf 3 - Label 4", size: "large", color: "black", width: 400, height: 300, productFields: [
-    { key: "product_name", label: "Product Name", type: "text", defaultValue: "Probiotic Blend" },
-    { key: "description", label: "Description", type: "text", defaultValue: "Digestive wellness" },
-    { key: "price", label: "Price", type: "price", defaultValue: "27.99" },
-  ]},
+  {
+    tin: "ESL-RETAIL-009", displayName: "Shelf 3 - Label 1", size: "large", color: "yellow", width: 400, height: 300, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Vitamin Bundle" },
+      { key: "description", label: "Description", type: "text", defaultValue: "Complete daily nutrition" },
+      { key: "price", label: "Price", type: "price", defaultValue: "34.99" },
+      { key: "original_price", label: "Original Price", type: "price", defaultValue: "49.99" },
+      { key: "promo", label: "Promo", type: "text", defaultValue: "BEST SELLER" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-010", displayName: "Shelf 3 - Label 2", size: "large", color: "black", width: 400, height: 300, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Omega-3 Fish Oil" },
+      { key: "description", label: "Description", type: "text", defaultValue: "Heart health support" },
+      { key: "price", label: "Price", type: "price", defaultValue: "19.99" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-011", displayName: "Shelf 3 - Label 3", size: "large", color: "red", width: 400, height: 300, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Multivitamin Pack" },
+      { key: "description", label: "Description", type: "text", defaultValue: "30 day supply" },
+      { key: "price", label: "Price", type: "price", defaultValue: "24.99" },
+      { key: "promo", label: "Promo", type: "text", defaultValue: "BUY 2 GET 1" },
+    ]
+  },
+  {
+    tin: "ESL-RETAIL-012", displayName: "Shelf 3 - Label 4", size: "large", color: "black", width: 400, height: 300, productFields: [
+      { key: "product_name", label: "Product Name", type: "text", defaultValue: "Probiotic Blend" },
+      { key: "description", label: "Description", type: "text", defaultValue: "Digestive wellness" },
+      { key: "price", label: "Price", type: "price", defaultValue: "27.99" },
+    ]
+  },
 ];
 
 // ===========================================

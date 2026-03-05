@@ -13,6 +13,7 @@ function SensorsHeader({
   activeTab,
   onRefresh,
   isRefreshing,
+  onReplayIntro,
 }: {
   tabs: string[];
   defaultTab: string;
@@ -21,6 +22,7 @@ function SensorsHeader({
   activeTab?: string;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  onReplayIntro?: () => void;
 }) {
   return (
     <>
@@ -33,7 +35,21 @@ function SensorsHeader({
             <span className="group-hover:text-white">Back</span>
           </Link>
           <h1 className="text-xl font-bold" style={{ color: colors.yellow }}>Sensors & Endnodes</h1>
-          <div className="w-20" />
+          <div className="w-20 flex justify-end">
+            {onReplayIntro && (
+              <button
+                onClick={onReplayIntro}
+                className="p-2 rounded-lg transition-all duration-300 hover:bg-white/10"
+                style={{ color: colors.textMuted }}
+                title="Replay Intro"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab Navigation with Refresh Button */}

@@ -42,7 +42,7 @@ const TABS_ARRAY = Object.values(TABS);
 
 function SensorsPageContent() {
   // Page state with persistence
-  const { isReady, showVideo, skipVideo, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
     pageKey: "sensors",
     tabs: TABS_ARRAY,
     defaultTab: TABS.grid,
@@ -140,11 +140,11 @@ function SensorsPageContent() {
           const fieldsFromMetrics =
             withMetricNames.length > 0
               ? Object.fromEntries(
-                  withMetricNames.map((m) => [
-                    m.metric!,
-                    { value: m.value, timestamp: m.timestamp },
-                  ])
-                )
+                withMetricNames.map((m) => [
+                  m.metric!,
+                  { value: m.value, timestamp: m.timestamp },
+                ])
+              )
               : undefined;
           const primary = metrics[0];
           return {
@@ -412,6 +412,7 @@ function SensorsPageContent() {
           accentColor={colors.sensorAccent}
           onRefresh={refreshDevices}
           isRefreshing={isRefreshing}
+          onReplayIntro={replayIntro}
         />
 
         {/* Content Area */}
