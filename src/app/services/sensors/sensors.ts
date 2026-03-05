@@ -134,13 +134,40 @@ const normalizeCategoryKey = (deviceType?: string): string => {
     .replace(/^_+|_+$/g, "");
 };
 
-const parseMetricValue = (raw?: string): { value: number | null; unit: string } => {
+/**
+ * Sanity-check sensor values to avoid "type casting ghost" numbers (e.g. ASCII "E@@" interpreted as double).
+ * - Non-finite (NaN, Infinity) → 0
+ * - Absurdly large values (e.g. > 1e10) → 0 (likely string bytes cast to number)
+ * - Light/lux: clip to 0–100000 (physical range for typical indoor sensors)
+ */
+export function sanitizeSensorValue(
+  value: number,
+  options?: { category?: string; metric?: string }
+): number {
+  if (value == null || !Number.isFinite(value)) return 0;
+  if (Math.abs(value) > 1e10) return 0;
+  const isLight =
+    options?.category === "light" ||
+    (options?.metric && /lux|light|intensity/i.test(options.metric));
+  if (isLight) {
+    if (value < 0) return 0;
+    if (value > 100000) return 100000;
+  }
+  return value;
+}
+
+const parseMetricValue = (
+  raw?: string,
+  options?: { category?: string; metric?: string }
+): { value: number | null; unit: string } => {
   if (!raw) return { value: null, unit: "" };
   const trimmed = String(raw).trim();
-  const match = trimmed.match(/^(-?\d+(?:\.\d+)?)(?:\s*(.*))?$/);
+  const match = trimmed.match(/^(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?:\s*(.*))?$/);
   if (!match) return { value: null, unit: "" };
   const value = Number(match[1]);
-  return { value: Number.isFinite(value) ? value : null, unit: match[2]?.trim() || "" };
+  if (!Number.isFinite(value)) return { value: null, unit: match[2]?.trim() || "" };
+  const sanitized = sanitizeSensorValue(value, options);
+  return { value: sanitized, unit: match[2]?.trim() || "" };
 };
 
 const isHexColor = (raw?: string): boolean => /^#([0-9A-Fa-f]{3}){1,2}$/.test(String(raw || "").trim());
@@ -261,7 +288,7 @@ export const fetchSensorMetrics = async (
       if (entry["Device Icon"] && !icons[tin]) {
         icons[tin] = entry["Device Icon"];
       }
-      const parsed = parseMetricValue(entry.Value);
+      const parsed = parseMetricValue(entry.Value, { metric: entry.Metric });
       const valueIsColor = isColorMetric(entry.Metric, entry.Value);
       if (parsed.value === null && !valueIsColor) return;
       const metricKey = (entry.Metric || "value").trim().toLowerCase() || "value";

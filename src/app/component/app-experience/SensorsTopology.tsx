@@ -2,6 +2,7 @@
 
 import React from "react";
 import { colors } from "@/config/theme";
+import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
 function SensorsTopology({
@@ -95,12 +96,14 @@ function SensorsTopology({
             const fields = sensorData.fields;
             const fieldKeys = fields ? Object.keys(fields) : [];
             const hasMultipleFields = fieldKeys.length > 1;
+            const displayOpts = { category: device?.category };
+            const safeValue = sanitizeSensorValue(Number(sensorData.value) || 0, displayOpts);
             const allFieldsTooltip =
               fieldKeys.length > 0
                 ? Object.entries(fields!)
-                  .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
+                  .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...displayOpts, metric: k }).toFixed(1) : "—"}`)
                   .join("\n")
-                : `${sensorData.value.toFixed(1)} ${sensorData.unit}`;
+                : `${safeValue.toFixed(1)} ${sensorData.unit}`;
 
             return (
               <g
@@ -130,11 +133,12 @@ function SensorsTopology({
                     </text>
                     {fieldKeys.map((k, i) => {
                       const v = fields![k]?.value;
+                      const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
                       const label = k.replace(/_/g, " ");
                       const y = sensorPos.y + r + 7.8 + i * 3.4;
                       return (
                         <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-                          {label}: {v != null ? Number(v).toFixed(1) : "—"}
+                          {label}: {safe != null ? safe.toFixed(1) : "—"}
                         </text>
                       );
                     })}
@@ -145,7 +149,7 @@ function SensorsTopology({
                       {sensorData.displayName}
                     </text>
                     <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-                      {sensorData.value.toFixed(1)}{sensorData.unit}
+                      {safeValue.toFixed(1)}{sensorData.unit}
                     </text>
                   </>
                 )}
@@ -196,7 +200,10 @@ function SensorsTopology({
                   .map((sensor, idx) => {
                     const device = getDeviceForSensor(sensor.tin);
                     const history = sensor.history || [];
-                    const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
+                    const tableOpts = { category: sensor.category };
+                    const safeCurrent = sanitizeSensorValue(Number(sensor.value) || 0, tableOpts);
+                    const safeHistory = history.map((v) => sanitizeSensorValue(Number(v) || 0, tableOpts));
+                    const trend = safeHistory.length > 1 ? safeHistory[safeHistory.length - 1] - safeHistory[0] : 0;
                     const timeSinceData = Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000);
 
                     return (
@@ -211,15 +218,15 @@ function SensorsTopology({
                         <td className="px-3 py-2"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
                         <td className="px-3 py-2">
                           <span className="text-base font-bold" style={{ color: colors.yellow }}>
-                            {sensor.value.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
+                            {safeCurrent.toFixed(1)}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? v.value : "—"}`).join("; ") : undefined}>
+                          <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : "—"}`).join("; ") : undefined}>
                             {sensor.fields && Object.keys(sensor.fields).length > 1
                               ? Object.entries(sensor.fields)
                                 .slice(1)
-                                .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? Number(v.value).toFixed(1) : "—"}`)
+                                .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }).toFixed(1) : "—"}`)
                                 .join("; ")
                               : "—"}
                           </span>
@@ -227,16 +234,16 @@ function SensorsTopology({
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <div className="h-6 w-20 flex items-end gap-px">
-                              {history.slice(-15).map((val, i) => {
-                                const min = Math.min(...history);
-                                const max = Math.max(...history);
+                              {safeHistory.slice(-15).map((val, i) => {
+                                const min = Math.min(...safeHistory);
+                                const max = Math.max(...safeHistory);
                                 const range = max - min || 1;
                                 const height = ((val - min) / range) * 100;
                                 return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
                               })}
                             </div>
                             <span className="text-xs font-medium flex items-center" style={{ color: trend > 0 ? colors.primary : trend < 0 ? "#ff6b6b" : colors.textMuted }}>
-                              {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{Math.abs(trend).toFixed(1)}
+                              {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{sanitizeSensorValue(Math.abs(trend), tableOpts).toFixed(1)}
                             </span>
                           </div>
                         </td>
@@ -253,3 +260,4 @@ function SensorsTopology({
 }
 
 export default SensorsTopology;
+

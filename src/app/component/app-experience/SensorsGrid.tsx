@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { colors } from "@/config/theme";
+import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import SensorsSelectedDevicePanel from "./SensorsSelectedDevicePanel";
@@ -41,10 +42,15 @@ function SensorsGrid({
           const liveData = connectedSensors.get(device.tin);
           const colorDisplay = liveData?.valueDisplay ?? device.lastReadingDisplay;
           const isColorTile = (device.category === "led" || device.category === "addressable_rgb") && colorDisplay && /^#([0-9A-Fa-f]{3}){1,2}$/.test(colorDisplay);
-          const displayValue = liveData?.value ?? device.lastReading;
+          const rawDisplayValue = liveData?.value ?? device.lastReading;
+          const displayOpts = { category: device.category };
+          const displayValue =
+            rawDisplayValue !== null && rawDisplayValue !== undefined
+              ? sanitizeSensorValue(Number(rawDisplayValue) || 0, displayOpts)
+              : null;
           const displayUnit = liveData?.unit ?? device.unit;
           const latestData =
-            displayValue !== null && displayValue !== undefined
+            displayValue !== null
               ? `${displayValue.toFixed(1)} ${displayUnit}`.trim()
               : "--";
           const fields = liveData?.fields ?? device.fields;
@@ -54,8 +60,9 @@ function SensorsGrid({
             fieldKeys.length > 0
               ? fieldKeys.map((k) => {
                   const v = fields![k]?.value;
+                  const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
                   const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                  return { label, value: v != null ? Number(v).toFixed(1) : "—" };
+                  return { label, value: safe != null ? safe.toFixed(1) : "—" };
                 })
               : [];
           return (
