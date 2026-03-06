@@ -1,4 +1,4 @@
- // Device Configuration - Add the TINs of devices you want to display in the Experience Center. - Only devices listed here will be shown, even if the API returns more.
+// Device Configuration - Add the TINs of devices you want to display in the Experience Center. - Only devices listed here will be shown, even if the API returns more.
 
 // SENSORS & ENDNODES EXPERIENCE
 
@@ -19,13 +19,13 @@ export interface EndnodeConfig {
   displayName: string;
 }
 
- // The central Endnode for topology visualization - All sensors connect to this single endnode
+// The central Endnode for topology visualization - All sensors connect to this single endnode
 export const centralEndnode: EndnodeConfig = {
   tin: "EN0001000020",
   displayName: "ThingsX Endnode",
 };
 
- // Sensor Device TINs - All sensors connect to the central endnode
+// Sensor Device TINs - All sensors connect to the central endnode
 export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature_probe" },
   { tin: "SN0002000001", displayName: "Accelerometer", category: "accelerometer" },
@@ -71,7 +71,7 @@ export interface EPDFieldConfig {
   defaultValue?: string | number;
 }
 
- // Demo EPD Devices for Sensors & Endnodes Experience - These are displayed with different colors and sizes
+// Demo EPD Devices for Sensors & Endnodes Experience - These are displayed with different colors and sizes
 export const sensorEPDDevices: EPDConfig[] = [
   // TODO: Replace with your real EPD TINs
   {
@@ -148,7 +148,7 @@ export interface ESLFieldConfig {
   defaultValue?: string | number;
 }
 
- // ESL Devices for Retail Experience (12 ESLs as per requirement)
+// ESL Devices for Retail Experience (12 ESLs as per requirement)
 export const retailESLDevices: ESLConfig[] = [
   // TODO: Replace with your real ESL TINs
   // Row 1 - Top Shelf
@@ -255,7 +255,7 @@ export interface LEDStripConfig {
   defaultBrightness: number;
 }
 
- // LED Strip devices for shelf lighting
+// LED Strip devices for shelf lighting
 export const retailLEDStrips: LEDStripConfig[] = [
   // TODO: Replace with your real LED TINs
   { tin: "LED-SHELF-001", displayName: "Top Shelf LED", shelfPosition: "top", defaultColor: "#ffffff", defaultBrightness: 80 },
@@ -275,7 +275,7 @@ export interface LoadCellConfig {
   productWeight: number; // weight per unit in grams
 }
 
- // Load cell devices for stock sensing
+// Load cell devices for stock sensing
 export const retailLoadCells: LoadCellConfig[] = [
   // TODO: Replace with your real Load Cell TINs
   { tin: "LOAD-001", displayName: "Slot 1", shelfPosition: "top", slotIndex: 1, maxWeight: 2000, productWeight: 250 },
@@ -297,7 +297,7 @@ export interface CameraConfig {
   capabilities: ("demographics" | "tracking" | "interaction" | "attendance")[];
 }
 
- // Camera devices for computer vision
+// Camera devices for computer vision
 export const retailCameras: CameraConfig[] = [
   // TODO: Replace with your real Camera TINs
   { tin: "CAM-RETAIL-001", displayName: "Store Entrance Camera", zone: "entrance", capabilities: ["demographics", "tracking", "attendance"] },
@@ -316,7 +316,7 @@ export interface RackScreenConfig {
   height: number;
 }
 
- // Rack screen devices for triggered marketing
+// Rack screen devices for triggered marketing
 export const retailRackScreens: RackScreenConfig[] = [
   // TODO: Replace with your real Rack Screen TINs
   { tin: "SCREEN-001", displayName: "Aisle 1 Display", zone: "aisle_1", width: 1920, height: 1080 },
@@ -333,7 +333,7 @@ export const getRetailLoadCellTins = (): string[] => retailLoadCells.map((d) => 
 export const getRetailCameraTins = (): string[] => retailCameras.map((d) => d.tin);
 export const getRetailScreenTins = (): string[] => retailRackScreens.map((d) => d.tin);
 
- // Sensor category display configuration
+// Sensor category display configuration
 export const categoryConfig: Record<string, { label: string; unit: string; icon: string }> = {
   temperature: { label: "Temperature", unit: "°C", icon: "thermometer" },
   temperature_probe: { label: "Temperature Probe", unit: "°C", icon: "thermometer" },
@@ -355,7 +355,7 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
 // Base path for device/sensor logos (public/assets/Logos)
 export const LOGOS_BASE = "/assets/Logos";
 
- // Sensor category → logo filename in public/assets/Logos. - Used for Sensors & Endnodes tiles when API does not return an icon.
+// Sensor category → logo filename in public/assets/Logos. - Used for Sensors & Endnodes tiles when API does not return an icon.
 export const categoryToLogo: Record<string, string> = {
   temperature: "Ambient Temperature Sensor.svg",
   temperature_probe: "DS18B20 temperature probe.svg",
@@ -374,7 +374,7 @@ export const categoryToLogo: Record<string, string> = {
   motion: "PIR Sensor.svg",
 };
 
- // EPD color mapping to actual display colors
+// EPD color mapping to actual display colors
 export const epdColorMap: Record<EPDColor, { bg: string; text: string; accent: string }> = {
   black: { bg: "#1a1a1a", text: "#ffffff", accent: "#333333" },
   red: { bg: "#1a1a1a", text: "#ff4444", accent: "#ff6666" },
@@ -382,7 +382,7 @@ export const epdColorMap: Record<EPDColor, { bg: string; text: string; accent: s
   white: { bg: "#f5f5f5", text: "#1a1a1a", accent: "#666666" },
 };
 
- // EPD size dimensions
+// EPD size dimensions
 export const epdSizeMap: Record<EPDSize, { width: number; height: number; scale: number }> = {
   small: { width: 152, height: 152, scale: 1 },
   medium: { width: 296, height: 152, scale: 1.2 },
