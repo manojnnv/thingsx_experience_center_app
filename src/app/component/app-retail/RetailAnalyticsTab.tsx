@@ -767,7 +767,7 @@ function HeatmapView({
         onOpenChange={setIsDrawerOpen}
         title={
           isProduct
-            ? `Product Interaction for ${selectedZone.name ?? "Zone"}`
+            ? `Product Interaction for ${selectedZone.name ?? "Zone"} zone.`
             : `Retail Analytics for ${selectedZone.name ?? "Zone"}`
         }
         footer={(() => {
@@ -815,11 +815,29 @@ function HeatmapView({
           {!selectedZoneData ? (
             <div>No detailed heatmap data available for this zone.</div>
           ) : isProduct && Array.isArray(selectedZoneData) ? (
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {selectedZoneData.map((p: any, idx: number) => {
-                const demographics = p.demographics ?? p.demo ?? {};
-                const ageObj = demographics?.["AGE Category"] ?? demographics?.ageCategory ?? {};
-                const genderObj = demographics?.["Gender"] ?? demographics?.gender ?? {};
+                // Safely extract demographics. Sometimes it's nested or stringified depending on API changes
+                let demographics: any = {};
+                if (p.demographics && typeof p.demographics === "object") demographics = p.demographics;
+                else if (p.demo && typeof p.demo === "object") demographics = p.demo;
+                else if (typeof p.demographics === "string") {
+                  try { demographics = JSON.parse(p.demographics); } catch { }
+                }
+
+                // The API can return exact strings like "AGE Category" or "Gender" at the root level of demographics.
+                // Or sometimes it's nested under demo. We need to be careful with casing.
+                let ageObj = demographics?.["AGE Category"] ?? demographics?.ageCategory ?? demographics?.age ?? demographics?.["Age Category"] ?? {};
+                let genderObj = demographics?.["Gender"] ?? demographics?.gender ?? {};
+
+                // If it's totally empty but the root object has them (flattened API response)
+                if (Object.keys(ageObj).length === 0 && (p["AGE Category"] || p.ageCategory)) {
+                  ageObj = p["AGE Category"] ?? p.ageCategory;
+                }
+                if (Object.keys(genderObj).length === 0 && (p["Gender"] || p.gender)) {
+                  genderObj = p["Gender"] ?? p.gender;
+                }
+
                 const renderBreakdown = (obj: any) => {
                   try {
                     const keys = Object.keys(obj || {});
@@ -856,39 +874,46 @@ function HeatmapView({
                 return (
                   <div
                     key={idx}
-                    className="p-4 rounded-2xl shadow-sm relative"
+                    className="flex flex-col p-4 rounded-xl shadow-sm relative transition-colors h-full"
                     style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}
                   >
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="font-semibold text-[1.1rem]">Product Name</Label>
-                        <div style={{ color: colors.textMuted }}>{p.product_name ?? p.productName ?? "-"}</div>
-                        <Label className="font-semibold text-[1.1rem]">Product ID</Label>
-                        <div style={{ color: colors.textMuted }}>{p.product_id ?? p.productId ?? "-"}</div>
-                        <Label className="font-semibold text-[1.1rem]">Product Nick Name</Label>
-                        <div style={{ color: colors.textMuted }}>{p.alias ?? p.nickName ?? "-"}</div>
+                    <div className="grid grid-cols-5 gap-4 h-full">
+                      {/* Left Side: Details */}
+                      <div className="col-span-3 flex flex-col space-y-3 pr-4 border-r" style={{ borderColor: `${colors.border}80` }}>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Product</div>
+                          <div className="font-bold text-sm leading-tight mt-0.5">{p.product_name ?? p.productName ?? "Unknown"}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>ID</div>
+                          <div className="text-sm font-medium mt-0.5">{p.product_id ?? p.productId ?? "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Zone Name</div>
+                          <div className="text-sm mt-0.5 line-clamp-2" title={p.location ?? p.zone_name ?? selectedZone.name ?? "-"}>
+                            {p.location ?? p.zone_name ?? selectedZone.name ?? "-"}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="font-semibold text-[1.1rem]"></Label>
-                        <div style={{ color: colors.textMuted }}>
-                          {p.zone_name ?? p.zoneName ?? selectedZone.name ?? "-"}
-                        </div>
-                        <Label className="font-semibold text-[1.1rem]">Interaction Count</Label>
-                        <div className="font-bold text-lg" style={{ color: accent }}>
-                          {p.interaction_count ?? "-"}
-                        </div>
-                        <Label className="font-semibold text-[1.1rem]">Location Info</Label>
-                        <div style={{ color: colors.textMuted }}>{p.location ?? p.zone_name ?? "-"}</div>
+
+                      {/* Right Side: Primary Metric */}
+                      <div className="col-span-2 flex flex-col justify-center items-center rounded-lg p-2" style={{ backgroundColor: `${accent}15` }}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Interactions</div>
+                        <div className="text-3xl font-black mt-1" style={{ color: accent }}>{p.interaction_count ?? "-"}</div>
                       </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="font-semibold text-[1.1rem]">AGE Category</Label>
-                        <div className="pt-2">{renderBreakdown(ageObj)}</div>
-                      </div>
-                      <div>
-                        <Label className="font-semibold text-[1.1rem]">Gender</Label>
-                        <div className="pt-2">{renderBreakdown(genderObj)}</div>
+
+                    {/* Bottom Split: Demographics (Span Full Width - ALWAYS VISIBLE) */}
+                    <div className="mt-4 pt-4 border-t border-dashed" style={{ borderColor: colors.border }}>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Age Category</div>
+                          {renderBreakdown(ageObj)}
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Gender</div>
+                          {renderBreakdown(genderObj)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -896,46 +921,93 @@ function HeatmapView({
               })}
             </div>
           ) : (
-            <div className="space-y-3">
-              <Card className="p-3 rounded-2xl" style={{ borderColor: colors.border, backgroundColor: colors.backgroundCard }}>
-                <div className="text-lg font-semibold">
-                  {(selectedZoneData as any).zone_name ?? selectedZone.name}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Zone ID: {(selectedZoneData as any).zone_id ?? selectedZone.id}
-                </div>
-              </Card>
-              <Card className="p-3 rounded-2xl" style={{ borderColor: colors.border, backgroundColor: colors.backgroundCard }}>
-                <div className="font-medium mb-2">Visitor Count</div>
-                <div className="text-2xl font-bold" style={{ color: accent }}>
-                  {String((selectedZoneData as any).visitor_count ?? "N/A")}
-                </div>
-              </Card>
-              <Card className="p-3 rounded-2xl" style={{ borderColor: colors.border, backgroundColor: colors.backgroundCard }}>
-                <div className="font-semibold mb-2">Demographics</div>
-                {(selectedZoneData as any).demographics &&
-                  typeof (selectedZoneData as any).demographics === "object" ? (
-                  Object.entries((selectedZoneData as any).demographics).map(([key, val]) => (
-                    <div key={key} className="mb-2">
-                      <div className="font-semibold">{String(key).trim()}</div>
-                      {val && typeof val === "object" ? (
-                        <div className="grid grid-cols-2 gap-2 mt-1">
-                          {Object.entries(val as any).map(([k2, v2]) => (
-                            <div key={k2} className="grid grid-cols-2">
-                              <div>{k2}</div>
-                              <div className="font-semibold">{String(v2)}</div>
-                            </div>
-                          ))}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {(() => {
+                const zData = selectedZoneData as any;
+                const demographics = zData.demographics ?? zData.demo ?? {};
+
+                let ageObj = demographics?.["AGE Category"] ?? demographics?.ageCategory ?? demographics?.age ?? demographics?.["Age Category"] ?? {};
+                let genderObj = demographics?.["Gender"] ?? demographics?.gender ?? {};
+
+                if (Object.keys(ageObj).length === 0 && (zData["AGE Category"] || zData.ageCategory)) {
+                  ageObj = zData["AGE Category"] ?? zData.ageCategory;
+                }
+                if (Object.keys(genderObj).length === 0 && (zData["Gender"] || zData.gender)) {
+                  genderObj = zData["Gender"] ?? zData.gender;
+                }
+
+                const renderBreakdown = (obj: any) => {
+                  try {
+                    const keys = Object.keys(obj || {});
+                    if (!keys || keys.length === 0)
+                      return (
+                        <span className="text-xs" style={{ color: colors.textMuted }}>
+                          -
+                        </span>
+                      );
+                    return (
+                      <div className="flex gap-2 flex-wrap text-xs" style={{ color: colors.textMuted }}>
+                        {keys.map((k) => (
+                          <div
+                            key={k}
+                            className="px-2 py-0.5 rounded"
+                            style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}
+                          >
+                            <span className="font-medium" style={{ color: colors.text }}>
+                              {k}:
+                            </span>{" "}
+                            {obj[k]}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  } catch {
+                    return (
+                      <span className="text-xs" style={{ color: colors.textMuted }}>
+                        -
+                      </span>
+                    );
+                  }
+                };
+
+                return (
+                  <div className="flex flex-col p-4 rounded-xl shadow-sm relative transition-colors h-full" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
+                    <div className="grid grid-cols-5 gap-4 h-full">
+                      {/* Left Side: Details */}
+                      <div className="col-span-3 flex flex-col space-y-3 pr-4 border-r" style={{ borderColor: `${colors.border}80` }}>
+                        <div>
+                          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Zone Name</div>
+                          <div className="font-bold text-sm leading-tight mt-0.5">{zData.zone_name ?? selectedZone.name ?? "Unknown Zone"}</div>
                         </div>
-                      ) : (
-                        <div>—</div>
-                      )}
+                        <div>
+                          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Zone ID</div>
+                          <div className="text-sm font-medium mt-0.5">{zData.zone_id ?? selectedZone.id ?? "-"}</div>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Primary Metric */}
+                      <div className="col-span-2 flex flex-col justify-center items-center rounded-lg p-2" style={{ backgroundColor: `${accent}15` }}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Visitors</div>
+                        <div className="text-3xl font-black mt-1" style={{ color: accent }}>{zData.visitor_count ?? "-"}</div>
+                      </div>
                     </div>
-                  ))
-                ) : (
-                  <div>No demographics available</div>
-                )}
-              </Card>
+
+                    {/* Bottom Split: Demographics (Span Full Width - ALWAYS VISIBLE) */}
+                    <div className="mt-4 pt-4 border-t border-dashed" style={{ borderColor: colors.border }}>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Age Category</div>
+                          {renderBreakdown(ageObj)}
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Gender</div>
+                          {renderBreakdown(genderObj)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
