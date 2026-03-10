@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { colors } from "@/config/theme";
 import VideoIntro from "@/app/component/app-experience/VideoIntro";
-import { WarehouseHeader, WarehouseIndoorPositioningTab, WarehousePassiveTrackingTab } from "@/app/component/app-warehouse";
+import { WarehouseHeader, WarehouseIndoorPositioningTab, WarehousePassiveTrackingTab, WarehouseRailCamTab } from "@/app/component/app-warehouse";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { useExperienceState } from "@/hooks/useExperienceState";
@@ -77,37 +77,9 @@ function WarehouseExperienceContent() {
               <WarehousePassiveTrackingTab accentColor={colors.warehouseAccent} />
             )}
 
-            {/* Rail Cam Tab - Placeholder */}
+            {/* Rail Cam Tab */}
             {activeTab === TABS.railCam && (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <div
-                    className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: `${colors.warehouseAccent}20` }}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={colors.warehouseAccent}
-                      strokeWidth={1.5}
-                      className="w-8 h-8"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
-                      />
-                    </svg>
-                  </div>
-                  <h2
-                    className="text-2xl font-bold mb-2"
-                    style={{ color: colors.warehouseAccent }}
-                  >
-                    Rail Cam
-                  </h2>
-                  <p style={{ color: colors.textMuted }}>Coming soon...</p>
-                </div>
-              </div>
+              <WarehouseRailCamTab accentColor={colors.warehouseAccent} />
             )}
           </main>
         </div>

@@ -25,6 +25,10 @@ export const centralEndnode: EndnodeConfig = {
   displayName: "ThingsX Endnode",
 };
 
+// RAIL CAM CONFIGURATION
+export const RAILCAM_TIN = "ST0008000001"; // Used for video feed and scan data
+export const STEPPER_RAIL_TIN = "SN0019000001"; // Used for motor/stepper controls
+
 // Sensor Device TINs - All sensors connect to the central endnode
 export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature_probe" },
