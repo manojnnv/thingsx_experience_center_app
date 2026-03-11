@@ -30,7 +30,8 @@ import AppSheet from "@/app/component/app-sheet/AppSheet";
 import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experience/types";
 
 // Constants
-const POLL_INTERVAL_MS = 3000; // Poll live data every 3 seconds
+const ACTIVE_POLL_INTERVAL_MS = 1000; // Poll live data every 1 second when active
+const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
 const STALE_THRESHOLD_MS = 15000; // Sensor considered inactive if no data in 15s
 
 const TABS = {
@@ -216,8 +217,9 @@ function SensorsPageContent() {
     if (activeTab !== TABS.topology || showVideo || devices.length === 0) return;
 
     let cancelled = false;
+    let timeoutId: NodeJS.Timeout;
 
-    const poll = async () => {
+    const doPollContent = async () => {
       const tins = devices.map((d) => d.tin);
       const result = await fetchLatestSensorData(tins);
       if (cancelled || result.error || !result.data) return;
@@ -371,13 +373,31 @@ function SensorsPageContent() {
       });
     };
 
-    // Initial poll immediately, then on interval
+    const poll = async () => {
+      await doPollContent();
+      if (!cancelled) {
+        const interval = document.visibilityState === "visible" ? ACTIVE_POLL_INTERVAL_MS : INACTIVE_POLL_INTERVAL_MS;
+        timeoutId = setTimeout(poll, interval);
+      }
+    };
+
+    // Initial poll immediately
     poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        clearTimeout(timeoutId);
+        if (!cancelled) {
+          poll();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeTab, showVideo, devices.length]); // devices.length so we re-run once devices load
 

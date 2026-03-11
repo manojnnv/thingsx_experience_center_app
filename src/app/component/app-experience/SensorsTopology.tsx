@@ -5,6 +5,90 @@ import { colors } from "@/config/theme";
 import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
+interface MemoizedSensorNodeProps {
+  sensorPos: { tin: string; x: number; y: number };
+  sensorData: SensorLiveData;
+  device?: DisplayDevice;
+  onSelectDevice: (device: DisplayDevice) => void;
+  displayOpts: { category?: string };
+}
+
+const MemoizedSensorNode = React.memo(
+  ({ sensorPos, sensorData, device, onSelectDevice, displayOpts }: MemoizedSensorNodeProps) => {
+    const r = 5.5; // sensor circle radius
+    const iconSize = 7; // logo size inside circle
+
+    const fields = sensorData.fields;
+    const fieldKeys = fields ? Object.keys(fields) : [];
+    const hasMultipleFields = fieldKeys.length > 1;
+    const history = sensorData.history || [];
+    const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
+    const displayValue = sensorData.value !== null ? sensorData.value : lastKnownGood;
+    const allFieldsTooltip =
+      fieldKeys.length > 0
+        ? Object.entries(fields!)
+            .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...displayOpts, metric: k }).toFixed(1) : "—"}`)
+            .join("\n")
+        : displayValue != null ? `${displayValue.toFixed(1)} ${sensorData.unit}` : "—";
+
+    return (
+      <g
+        className="cursor-pointer"
+        onClick={() => device && onSelectDevice(device)}
+      >
+        <title>{sensorData.displayName}{"\n"}{allFieldsTooltip}</title>
+        <circle cx={sensorPos.x} cy={sensorPos.y} r={r} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
+        {device?.icon ? (
+          <image
+            href={device.icon}
+            x={sensorPos.x - iconSize / 2}
+            y={sensorPos.y - iconSize / 2}
+            width={iconSize}
+            height={iconSize}
+            preserveAspectRatio="xMidYMid meet"
+            filter="url(#greenTint)"
+          />
+        ) : (
+          <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
+        )}
+        {hasMultipleFields && fieldKeys.length > 0 ? (
+          <>
+            <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
+              {sensorData.displayName}
+            </text>
+            {fieldKeys.map((k, i) => {
+              const v = fields![k]?.value;
+              const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
+              const label = k.replace(/_/g, " ");
+              const y = sensorPos.y + r + 7.8 + i * 3.4;
+              return (
+                <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
+                  {label}: {safe != null ? safe.toFixed(1) : "—"}
+                </text>
+              );
+            })}
+          </>
+        ) : (
+          <>
+            <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
+              {sensorData.displayName}
+            </text>
+            <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
+              {displayValue != null ? `${displayValue.toFixed(1)}${sensorData.unit}` : "—"}
+            </text>
+          </>
+        )}
+      </g>
+    );
+  },
+  (prev, next) => {
+    return prev.sensorData.lastReceivedAt.getTime() === next.sensorData.lastReceivedAt.getTime() &&
+           prev.device?.icon === next.device?.icon;
+  }
+);
+
+// Row implementation moved directly into component to keep code simple, readable and easy to debug.
+
 function SensorsTopology({
   devices,
   connectedSensors,
@@ -22,6 +106,13 @@ function SensorsTopology({
 }) {
   const STALE_THRESHOLD_MS = 15000; // 15s — sensor is "stale" if no fresh data
   const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
+
+  // Tick every second to ensure "timeSinceData" updates even when exactly no new sensor values arrive.
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const isVisibleSensor = (s: SensorLiveData) => {
     if (Date.now() - s.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) return false;
@@ -90,72 +181,17 @@ function SensorsTopology({
             const isActive = sensorData && Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
             if (!isActive || !sensorData) return null;
 
-            const r = 5.5; // sensor circle radius
-            const iconSize = 7; // logo size inside circle
-
-            const fields = sensorData.fields;
-            const fieldKeys = fields ? Object.keys(fields) : [];
-            const hasMultipleFields = fieldKeys.length > 1;
             const displayOpts = { category: device?.category };
-            const history = sensorData.history || [];
-            const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
-            const displayValue = sensorData.value !== null ? sensorData.value : lastKnownGood;
-            const allFieldsTooltip =
-              fieldKeys.length > 0
-                ? Object.entries(fields!)
-                  .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...displayOpts, metric: k }).toFixed(1) : "—"}`)
-                  .join("\n")
-                : displayValue != null ? `${displayValue.toFixed(1)} ${sensorData.unit}` : "—";
 
             return (
-              <g
+              <MemoizedSensorNode
                 key={sensorPos.tin}
-                className="cursor-pointer"
-                onClick={() => device && onSelectDevice(device)}
-              >
-                <title>{sensorData.displayName}\n{allFieldsTooltip}</title>
-                <circle cx={sensorPos.x} cy={sensorPos.y} r={r} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
-                {device?.icon ? (
-                  <image
-                    href={device.icon}
-                    x={sensorPos.x - iconSize / 2}
-                    y={sensorPos.y - iconSize / 2}
-                    width={iconSize}
-                    height={iconSize}
-                    preserveAspectRatio="xMidYMid meet"
-                    filter="url(#greenTint)"
-                  />
-                ) : (
-                  <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
-                )}
-                {hasMultipleFields && fieldKeys.length > 0 ? (
-                  <>
-                    <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
-                      {sensorData.displayName}
-                    </text>
-                    {fieldKeys.map((k, i) => {
-                      const v = fields![k]?.value;
-                      const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
-                      const label = k.replace(/_/g, " ");
-                      const y = sensorPos.y + r + 7.8 + i * 3.4;
-                      return (
-                        <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-                          {label}: {safe != null ? safe.toFixed(1) : "—"}
-                        </text>
-                      );
-                    })}
-                  </>
-                ) : (
-                  <>
-                    <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
-                      {sensorData.displayName}
-                    </text>
-                    <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-                      {displayValue != null ? `${displayValue.toFixed(1)}${sensorData.unit}` : "—"}
-                    </text>
-                  </>
-                )}
-              </g>
+                sensorPos={sensorPos}
+                sensorData={sensorData}
+                device={device}
+                onSelectDevice={onSelectDevice}
+                displayOpts={displayOpts}
+              />
             );
           })}
         </svg>
@@ -185,15 +221,14 @@ function SensorsTopology({
           </div>
         ) : (
           <div className="overflow-auto flex-1 min-h-0">
-            <table className="w-full">
+            <table className="w-full text-left" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr style={{ backgroundColor: colors.background }}>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Sensor</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Type</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Last Data</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Current Value</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>All values</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Trend (30s)</th>
+                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Sensor</th>
+                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Type</th>
+                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Last Data</th>
+                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Current Value</th>
+                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Trend (30s)</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,40 +240,57 @@ function SensorsTopology({
                     const tableOpts = { category: sensor.category };
                     const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
                     const displayCurrent = sensor.value !== null ? sensor.value : lastKnownGood;
-                    const trend = history.length > 1 ? history[history.length - 1] - history[0] : 0;
-                    const timeSinceData = Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000);
+                    
+                    // Fix negative "Last Data" time server-client drift
+                    const timeSinceData = Math.max(0, Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000));
+
+                    // Fix trend inconsistencies: align numerical trend perfectly with visible 15-frame sparkline
+                    const recentHistory = history.slice(-15);
+                    const trend = recentHistory.length > 1 ? recentHistory[recentHistory.length - 1] - recentHistory[0] : 0;
+                    
+                    // Always render exactly 15 bars in the sparkline to avoid column jumps
+                    const paddedHistory = [...Array(Math.max(0, 15 - recentHistory.length)).fill(null), ...recentHistory];
+                    
+                    // Keep code clean by extracting secondary fields map inline locally
+                    const secondaryFields = sensor.fields 
+                      ? Object.entries(sensor.fields)
+                          .slice(1)
+                          .map(([k, v]) => {
+                            const safeVal = v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : null;
+                            return `${k.replace(/_/g, " ")}: ${safeVal !== null ? safeVal.toFixed(1) : "—"}`;
+                          })
+                          .join(" | ")
+                      : null;
 
                     return (
                       <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 w-1/4">
                           <div>
                             <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
                             <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
                           </div>
                         </td>
-                        <td className="px-3 py-2"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
-                        <td className="px-3 py-2"><span className="text-sm" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
-                        <td className="px-3 py-2">
-                          <span className="text-base font-bold" style={{ color: colors.yellow }}>
-                            {displayCurrent != null ? displayCurrent.toFixed(1) : "—"}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
-                          </span>
+                        <td className="px-3 py-2 w-1/6"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
+                        <td className="px-3 py-2 w-1/6"><span className="text-sm font-medium" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
+                        <td className="px-3 py-2 w-1/4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-base font-bold" style={{ color: colors.yellow }}>
+                              {displayCurrent != null ? displayCurrent.toFixed(1) : "—"}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
+                            </span>
+                            {secondaryFields && (
+                              <p className="text-xs font-medium" style={{ color: colors.textMuted }}>
+                                {secondaryFields}
+                              </p>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-3 py-2">
-                          <span className="text-xs" style={{ color: colors.textMuted }} title={sensor.fields && Object.keys(sensor.fields).length > 1 ? Object.entries(sensor.fields).map(([k, v]) => `${k}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : "—"}`).join("; ") : undefined}>
-                            {sensor.fields && Object.keys(sensor.fields).length > 1
-                              ? Object.entries(sensor.fields)
-                                .slice(1)
-                                .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }).toFixed(1) : "—"}`)
-                                .join("; ")
-                              : "—"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 w-1/6">
                           <div className="flex items-center gap-2">
                             <div className="h-6 w-20 flex items-end gap-px">
-                              {history.slice(-15).map((val, i) => {
-                                const min = Math.min(...history);
-                                const max = Math.max(...history);
+                              {paddedHistory.map((val, i) => {
+                                if (val === null) return <div key={i} className="flex-1 rounded-t" style={{ height: "10%", backgroundColor: colors.yellow, opacity: 0.1 }} />;
+                                const min = Math.min(...recentHistory);
+                                const max = Math.max(...recentHistory);
                                 const range = max - min || 1;
                                 const height = ((val - min) / range) * 100;
                                 return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
