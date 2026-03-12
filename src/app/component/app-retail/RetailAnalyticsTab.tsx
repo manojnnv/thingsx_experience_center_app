@@ -9,11 +9,12 @@ import AppTooltip from "@/app/component/app-tooltip/AppTooltip";
 import AppIconButton from "@/app/component/app-icon-button/AppIconButton";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
-import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatmap";
+import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatMap";
 import { getLayout } from "@/lib/layout";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { getSiteId } from "@/config/site";
+import TimelinePlaybackBar from "./TimelinePlaybackBar";
 
 const HEATMAP_GRADIENT = ["#2196f3", "#00bcd4", "#4caf50", "#ffd54f", "#ffa000", "#ff3b30"];
 
@@ -76,6 +77,8 @@ function HeatmapView({
   const [selectedZoneData, setSelectedZoneData] = useState<any | any[] | null>(null);
   const [heatMapData, setHeatMapData] = useState<any[]>([]);
   const heatMapDataRef = useRef<any[]>([]);
+  const allAggregatedDataRef = useRef<any[]>([]);
+  const segmentWindowsRef = useRef<{ start: string; end: string }[]>([]);
   const layoutLoadedRef = useRef(false);
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
     min: 0,
@@ -83,6 +86,10 @@ function HeatmapView({
   });
   const [heatmapOpacity, setHeatmapOpacity] = useState(0.6);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [activeSegment, setActiveSegment] = useState<number | null>(null);
+  const [segmentDataMap, setSegmentDataMap] = useState<Map<number, any[]>>(new Map());
+  const [segmentIntensities, setSegmentIntensities] = useState<number[]>([]);
+  const [segmentLabels, setSegmentLabels] = useState<string[]>([]);
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
     x: number;
@@ -483,13 +490,20 @@ function HeatmapView({
     }
   }, [editor, layout, applyHeatmap]);
 
-  // Re-apply heatmap whenever data changes and layout is already loaded
   useEffect(() => {
     heatMapDataRef.current = heatMapData;
-    if (layoutLoadedRef.current && heatMapData.length > 0) {
+    if (!layoutLoadedRef.current) return;
+    if (heatMapData.length > 0) {
       try { applyHeatmap(heatMapData); } catch { }
+    } else if (editor?.canvas) {
+      const canvas = editor.canvas;
+      const stale = canvas.getObjects().filter((o: any) =>
+        (o as any).isHeatmapOverlay || (o as any).isZoneLabelBg || (o as any).isZoneCountLabel
+      );
+      stale.forEach((o: any) => { try { canvas.remove(o); } catch { } });
+      canvas.requestRenderAll();
     }
-  }, [heatMapData, applyHeatmap]);
+  }, [heatMapData, applyHeatmap, editor]);
 
   useEffect(() => {
     if (!editor?.canvas) return;
@@ -554,6 +568,83 @@ function HeatmapView({
     };
     canvas.on("mouse:wheel", handleWheel);
     return () => canvas.off("mouse:wheel", handleWheel);
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor?.canvas) return;
+    const canvas = editor.canvas;
+    let spaceHeld = false;
+    let isPanning = false;
+    let lastPanX = 0;
+    let lastPanY = 0;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !spaceHeld) {
+        spaceHeld = true;
+        canvas.defaultCursor = "grab";
+        canvas.hoverCursor = "grab";
+        canvas.selection = false;
+        e.preventDefault();
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spaceHeld = false;
+        isPanning = false;
+        canvas.defaultCursor = "default";
+        canvas.hoverCursor = "pointer";
+        canvas.selection = false;
+      }
+    };
+
+    const onMouseDown = (opt: any) => {
+      if (spaceHeld) {
+        isPanning = true;
+        lastPanX = opt.e.clientX;
+        lastPanY = opt.e.clientY;
+        canvas.defaultCursor = "grabbing";
+        canvas.hoverCursor = "grabbing";
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+      }
+    };
+
+    const onMouseMove = (opt: any) => {
+      if (!isPanning) return;
+      const dx = opt.e.clientX - lastPanX;
+      const dy = opt.e.clientY - lastPanY;
+      const vpt = canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] += dx;
+        vpt[5] += dy;
+        canvas.setViewportTransform(vpt);
+      }
+      lastPanX = opt.e.clientX;
+      lastPanY = opt.e.clientY;
+    };
+
+    const onMouseUp = () => {
+      if (isPanning) {
+        isPanning = false;
+        canvas.defaultCursor = spaceHeld ? "grab" : "default";
+        canvas.hoverCursor = spaceHeld ? "grab" : "pointer";
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    canvas.on("mouse:down", onMouseDown);
+    canvas.on("mouse:move", onMouseMove);
+    canvas.on("mouse:up", onMouseUp);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      canvas.off("mouse:down", onMouseDown);
+      canvas.off("mouse:move", onMouseMove);
+      canvas.off("mouse:up", onMouseUp);
+    };
   }, [editor]);
 
   useEffect(() => {
@@ -626,61 +717,127 @@ function HeatmapView({
     setDateAndTime(isoDates);
   };
 
-  const fetchHeatMap = async () => {
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const fetchTimelineData = async (startDateISO: string, endDateISO: string) => {
     try {
       setLoading(true);
-      const response = isProduct
-        ? await productInteraction({
-          siteId: getSiteId(),
-          startDate: dateAndTime[0],
-          endDate: dateAndTime[1],
-        })
-        : await zoneCountHeatMap({
-          siteId: getSiteId(),
-          startDate: dateAndTime[0],
-          endDate: dateAndTime[1],
-        });
+      setActiveSegment(null);
+      setSegmentDataMap(new Map());
+      setSegmentIntensities([]);
+      setSegmentLabels([]);
+      segmentWindowsRef.current = [];
+
+      const start = new Date(startDateISO);
+      const end = new Date(endDateISO);
+      const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      const dayCount = Math.round((endMidnight.getTime() - startMidnight.getTime()) / 86400000) + 1;
+
+      const windows: { start: string; end: string; label: string }[] = [];
+
+      if (dayCount <= 2) {
+        const totalHours = dayCount * 24;
+        for (let i = 0; i < totalHours; i++) {
+          const wStart = new Date(startMidnight.getTime() + i * 3600000);
+          const wEnd = new Date(wStart.getTime() + 3600000);
+          const label = dayCount === 1
+            ? String(wStart.getHours()).padStart(2, "0")
+            : String(i);
+          windows.push({ start: wStart.toISOString(), end: wEnd.toISOString(), label });
+        }
+      } else {
+        for (let i = 0; i < dayCount; i++) {
+          const wStart = new Date(startMidnight.getTime() + i * 86400000);
+          const wEnd = new Date(wStart.getTime() + 86400000);
+          const label = `Day ${i + 1} (${MONTH_NAMES[wStart.getMonth()]} ${wStart.getDate()})`;
+          windows.push({ start: wStart.toISOString(), end: wEnd.toISOString(), label });
+        }
+      }
+
+      segmentWindowsRef.current = windows.map(({ start: s, end: e }) => ({ start: s, end: e }));
+      setSegmentLabels(windows.map((w) => w.label));
+      setSegmentIntensities(new Array(windows.length).fill(0));
+
+      const siteID = getSiteId();
+      const apiCall = isProduct ? productInteraction : zoneCountHeatMap;
+      const response = await apiCall({ siteId: siteID, startDate: startDateISO, endDate: endDateISO });
+
       if (response.error) {
         console.warn("Failed to load heatmap:", response.error);
         setHeatMapData([]);
         return;
       }
-      const data = response?.data || [];
-      heatMapDataRef.current = data;
-      setHeatMapData(data);
+
+      const allData = response.data || [];
+      allAggregatedDataRef.current = allData;
+      heatMapDataRef.current = allData;
+      setHeatMapData(allData);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDateSubmit = () => {
+    if (dateAndTime[0] && dateAndTime[1]) {
+      fetchTimelineData(dateAndTime[0], dateAndTime[1]);
+    }
+  };
+
+  const handleSegmentChange = useCallback(async (index: number) => {
+    setActiveSegment(index);
+
+    const cached = segmentDataMap.get(index);
+    if (cached) {
+      heatMapDataRef.current = cached;
+      setHeatMapData(cached);
+      return;
+    }
+
+    const window = segmentWindowsRef.current[index];
+    if (!window) return;
+
+    const apiCall = isProduct ? productInteraction : zoneCountHeatMap;
+    const response = await apiCall({
+      siteId: getSiteId(),
+      startDate: window.start,
+      endDate: window.end,
+    });
+
+    const data = (!response.error && response.data) ? response.data : [];
+
+    setSegmentDataMap((prev) => {
+      const next = new Map(prev);
+      next.set(index, data);
+      return next;
+    });
+
+    const total = data.reduce((sum: number, item: any) => {
+      const v = getCountValue(item);
+      return sum + (v ?? 0);
+    }, 0);
+    setSegmentIntensities((prev) => {
+      const next = [...prev];
+      next[index] = total;
+      return next;
+    });
+
+    heatMapDataRef.current = data;
+    setHeatMapData(data);
+  }, [segmentDataMap, isProduct]);
+
+  const handleShowAll = useCallback(() => {
+    setActiveSegment(null);
+    const allData = allAggregatedDataRef.current;
+    heatMapDataRef.current = allData;
+    setHeatMapData(allData);
+  }, []);
+
   useEffect(() => {
-    const fetchLast24Data = async () => {
-      try {
-        setLoading(true);
-        const response = isProduct
-          ? await productInteraction({
-            siteId: getSiteId(),
-            startDate: dateAndTime[0],
-            endDate: dateAndTime[1],
-          })
-          : await zoneCountHeatMap({
-            siteId: getSiteId(),
-            startDate: dateAndTime[0],
-            endDate: dateAndTime[1],
-          });
-        if (response.error) {
-          console.warn("Failed to load heatmap:", response.error);
-          setHeatMapData([]);
-          return;
-        }
-        const data = response?.data || [];
-        heatMapDataRef.current = data;
-        setHeatMapData(data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLast24Data();
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(startOfToday.getTime() + 86400000 - 1);
+    fetchTimelineData(startOfToday.toISOString(), endOfToday.toISOString());
   }, []);
 
   return (
@@ -691,7 +848,18 @@ function HeatmapView({
         </div>
       )}
       <div className="flex-none w-full grid place-content-end py-1">
-        <DateTimePicker onchange={onchangeDateAndTiem} onsubmit={fetchHeatMap} />
+        <DateTimePicker onchange={onchangeDateAndTiem} onsubmit={handleDateSubmit} />
+      </div>
+      <div className="mt-2 mb-3">
+        <TimelinePlaybackBar
+          segmentCount={segmentLabels.length}
+          segmentIntensities={segmentIntensities}
+          segmentLabels={segmentLabels}
+          activeSegment={activeSegment}
+          onSegmentChange={handleSegmentChange}
+          onShowAll={handleShowAll}
+          disabled={segmentLabels.length === 0}
+        />
       </div>
       <div
         ref={canvasRef}

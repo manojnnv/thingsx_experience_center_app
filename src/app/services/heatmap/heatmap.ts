@@ -1,7 +1,6 @@
 "use client";
 
 import { api } from "@/app/utils/api";
-import { toast } from "sonner";
 import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 export interface ZoneHeatmapData {
@@ -37,7 +36,6 @@ const zoneCountHeatMap = async (params: {
       start_date: params.startDate,
       end_date: params.endDate,
     });
-    toast.message(resp?.data?.message);
     return ok(resp?.data?.data || []);
   } catch (error) {
     return fail(getErrorMessage(error, "Failed to load zone heatmap"));
@@ -55,7 +53,6 @@ const productInteraction = async (params: {
       start_date: params.startDate,
       end_date: params.endDate,
     });
-    toast.message(resp?.data?.message);
     return ok(resp?.data?.data || []);
   } catch (error) {
     return fail(getErrorMessage(error, "Failed to load product heatmap"));

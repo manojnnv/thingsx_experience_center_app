@@ -349,7 +349,7 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   accelerometer: { label: "Accelerometer", unit: "m/s²", icon: "activity" },
   gas: { label: "Gas", unit: "ppm", icon: "wind" },
   current: { label: "Current", unit: "A", icon: "zap" },
-  magnetometer: { label: "Magnetometer", unit: "µT", icon: "compass" },
+  magnetometer: { label: "Magnetometer", unit: "°", icon: "compass" },
   relay: { label: "Relay", unit: "state", icon: "toggle-right" },
   led: { label: "LED", unit: "", icon: "sun" },
   addressable_rgb: { label: "Addressable RGB", unit: "", icon: "sun" },
