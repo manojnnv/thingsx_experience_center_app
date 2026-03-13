@@ -117,6 +117,16 @@ export default function TimelinePlaybackBar({
   const halfSegPct = segmentCount > 0 ? 50 / segmentCount : 0;
   const travelPct = segmentCount > 1 ? ((segmentCount - 1) / segmentCount) * 100 : 0;
 
+  const getIntensityColor = (intensity: number): string => {
+    const clamped = Math.max(0, Math.min(1, intensity));
+    if (clamped <= 0.5) {
+      const r = Math.round(255 * (clamped * 2));
+      return `rgb(${r}, 200, 50)`;
+    }
+    const g = Math.round(200 * (1 - (clamped - 0.5) * 2));
+    return `rgb(255, ${g}, 50)`;
+  };
+
   return (
     <div
       className="flex flex-col gap-1.5 rounded-md p-2"
@@ -208,6 +218,22 @@ export default function TimelinePlaybackBar({
           }}
         />
       </div>
+
+      {segmentCount > 0 && segmentIntensities.length > 0 && (
+        <div className="flex gap-px">
+          {Array.from({ length: segmentCount }, (_, i) => (
+            <div
+              key={i}
+              className="h-1.5 rounded-sm transition-opacity duration-200"
+              style={{
+                flex: 1,
+                backgroundColor: getIntensityColor(segmentIntensities[i] ?? 0),
+                opacity: activeSegment === null || activeSegment === i ? 1 : 0.25,
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="flex">
         {Array.from({ length: segmentCount }, (_, i) => (

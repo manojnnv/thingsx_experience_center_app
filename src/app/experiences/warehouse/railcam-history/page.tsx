@@ -20,9 +20,10 @@ function RailcamHistoryContent() {
     const [scanData, setScanData] = useState<Record<string, unknown>[]>([]);
     const [scanColumns, setScanColumns] = useState<ColumnDef<any>[]>([]);
 
-    // Generate table columns from data keys
+    const HIDDEN_COLUMNS = new Set(["box_present", "qr_present", "x_center", "y_center", "device"]);
+
     const generateColumns = useCallback((keys: string[]): ColumnDef<any>[] => {
-        return keys.map((key) => ({
+        return keys.filter((key) => !HIDDEN_COLUMNS.has(key)).map((key) => ({
             accessorKey: key,
             header: ({ column }) => (
                 <Button
