@@ -14,8 +14,42 @@ export const VIDEO_LIBRARY: VideoEntry[] = [
   },
   {
     id: "demo-2",
-    title: "Demo Video 2",
-    description: "Placeholder — replace with actual video",
-    url: "/videos/demo2.mp4",
+    title: "Thingsx GCC version Video",
+    url: "http://thingsx.home:8080/Demo_videos/ThingX GCC version Video.mp4",
   },
-];
+  {
+    id: "demo-3",
+    title: "Thingsx Warehouse Video",
+    url: "http://thingsx.home:8080/Demo_videos/Warehouse GCC version Video FINAL.mp4",
+  },
+  {
+    id: "demo-4",
+    title: "Thingsx Computer Vision Video",
+    url: "http://thingsx.home:8080/Demo_videos/ThingsX comp vision video.mp4",
+  },
+  {
+    id: "demo-5",
+    title: "People Tracking Video",
+    url: "http://thingsx.home:8080/Demo_videos/cam_entry.mp4",
+  },
+  {
+    id: "demo-6",
+    title: "People Tracking Video packaged food zone",
+    url: "http://thingsx.home:8080/Demo_videos/retail_2.mp4",
+  },
+  {
+    id: "demo-7",
+    title: "Product Interaction Video packaged food zone",
+    url: "http://thingsx.home:8080/Demo_videos/retail_3.mp4",
+  },
+  {
+    id: "demo-8",
+    title: "Product Interaction Video Daily Essentials zone",
+    url: "http://thingsx.home:8080/Demo_videos/retail_4.mp4",
+  },
+  {
+    id: "demo-9",
+    title: "People Tracking Video Daily Essentials zone and household zone",
+    url: "http://thingsx.home:8080/Demo_videos/retail_5.mp4",
+  },
+]; 
