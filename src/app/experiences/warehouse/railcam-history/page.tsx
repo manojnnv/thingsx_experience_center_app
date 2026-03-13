@@ -8,6 +8,7 @@ import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
 import AppLoading from "@/app/component/app-loading/AppLoading";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 import { Button } from "@/app/components/ui/button";
 import { getRailcamDetails } from "@/app/services/railcam/railcam";
 import { formatDateAndTime } from "@/app/utils/dateTime";
@@ -154,6 +155,7 @@ function RailcamHistoryContent() {
                     )}
                 </div>
             </div>
+            <VideoLibraryButton />
         </div>
     );
 }

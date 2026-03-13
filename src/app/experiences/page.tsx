@@ -4,6 +4,7 @@ import ExperiencesTitle from "@/app/component/app-experiences/ExperiencesTitle";
 import ExperiencesTiles from "@/app/component/app-experiences/ExperiencesTiles";
 import ExperiencesFooter from "@/app/component/app-experiences/ExperiencesFooter";
 import { colors } from "@/config/theme";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 export default function ExperiencesPage() {
   return (
@@ -21,6 +22,7 @@ export default function ExperiencesPage() {
       </main>
 
       <ExperiencesFooter />
+      <VideoLibraryButton />
     </div>
   );
 }

@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { getCameras, getVideoFeedV2, CameraStream, ModelConfig } from "@/app/services/realtime/realtime";
-import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import {
   RetailHeader,
   RetailStreamTab,
@@ -14,6 +13,7 @@ import {
 } from "@/app/component/app-retail";
 import type { DropdownOption } from "@/app/component/app-retail/types";
 import { useExperienceState } from "@/hooks/useExperienceState";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // ===========================================
 // Page Accent Color
@@ -41,7 +41,7 @@ function RetailExperienceContent() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Page state with persistence
-  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, activeTab, setActiveTab } = useExperienceState({
     pageKey: "retail",
     tabs: TABS_ARRAY,
     defaultTab: TABS.stream,
@@ -85,7 +85,7 @@ function RetailExperienceContent() {
   // ===========================================
 
   useEffect(() => {
-    if (!isAuthenticated || authLoading || showVideo) return;
+    if (!isAuthenticated || authLoading) return;
 
     async function loadCameras() {
       setCamerasLoading(true);
@@ -105,7 +105,7 @@ function RetailExperienceContent() {
     if (activeTab === TABS.stream) {
       loadCameras();
     }
-  }, [isAuthenticated, authLoading, showVideo, activeTab]);
+  }, [isAuthenticated, authLoading, activeTab]);
 
   // ===========================================
   // Auto-select camera + product interaction stream/model
@@ -262,16 +262,7 @@ function RetailExperienceContent() {
     >
       <ThemedToaster accentColor={colors.retailAccent} />
 
-      <VideoIntro
-        show={showVideo}
-        onSkip={skipVideo}
-        title="Retail Simulation"
-        subtitle="Experience real-time video streaming with model selection and analytics."
-        buttonLabel="Skip Intro"
-        accentColor={accent}
-      />
-
-      <div className={`flex flex-col h-screen ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}`}>
+      <div className="flex flex-col h-screen">
         <RetailHeader
           accent={accent}
           tabs={TABS_ARRAY}
@@ -279,7 +270,6 @@ function RetailExperienceContent() {
           onTabChange={(tab) => setActiveTab(tab)}
           accentColor={accent}
           activeTab={activeTab}
-          onReplayIntro={replayIntro}
         />
 
         {/* Content */}
@@ -314,6 +304,7 @@ function RetailExperienceContent() {
           )}
         </main>
       </div>
+      <VideoLibraryButton />
     </div>
   );
 }

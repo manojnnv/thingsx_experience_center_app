@@ -2,11 +2,11 @@
 
 import { Suspense } from "react";
 import { colors } from "@/config/theme";
-import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import { WarehouseHeader, WarehouseIndoorPositioningTab, WarehousePassiveTrackingTab, WarehouseRailCamTab } from "@/app/component/app-warehouse";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { useExperienceState } from "@/hooks/useExperienceState";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // Tab configuration
 const TABS = {
@@ -18,7 +18,7 @@ const TABS = {
 const TABS_ARRAY = Object.values(TABS);
 
 function WarehouseExperienceContent() {
-  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, activeTab, setActiveTab } = useExperienceState({
     pageKey: "warehouse",
     tabs: TABS_ARRAY,
     defaultTab: TABS.indoorPositioning,
@@ -42,27 +42,14 @@ function WarehouseExperienceContent() {
       >
         <ThemedToaster accentColor={colors.warehouseAccent} />
 
-        <VideoIntro
-          show={showVideo}
-          onSkip={skipVideo}
-          title="Warehouse Experience"
-          subtitle="Experience indoor positioning, rail cam monitoring, and logistics optimization."
-          buttonLabel="Enter"
-          accentColor={colors.warehouseAccent}
-        />
-
         {/* Main Content */}
-        <div
-          className={`flex flex-col h-screen ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"
-            }`}
-        >
+        <div className="flex flex-col h-screen">
           <WarehouseHeader
             tabs={TABS_ARRAY}
             defaultTab={TABS.indoorPositioning}
             onTabChange={(tab) => setActiveTab(tab)}
             accentColor={colors.warehouseAccent}
             activeTab={activeTab}
-            onReplayIntro={replayIntro}
           />
 
           {/* Content Area */}
@@ -83,6 +70,7 @@ function WarehouseExperienceContent() {
             )}
           </main>
         </div>
+        <VideoLibraryButton />
       </div>
     </TooltipProvider>
   );

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 
 import { colors } from "@/config/theme";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // Roadmap stage labels (from reference image)
 const JOURNEY_STAGES = [
@@ -228,6 +229,7 @@ export default function InnovationLabPage() {
           </div>
         </section>
       </main>
+      <VideoLibraryButton />
     </div>
   );
 }

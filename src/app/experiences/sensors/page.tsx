@@ -20,7 +20,6 @@ import {
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
-import VideoIntro from "@/app/component/app-experience/VideoIntro";
 import SensorsHeader from "@/app/component/app-experience/SensorsHeader";
 import SensorsLoading from "@/app/component/app-experience/SensorsLoading";
 import SensorsGrid from "@/app/component/app-experience/SensorsGrid";
@@ -28,6 +27,7 @@ import SensorsTopology from "@/app/component/app-experience/SensorsTopology";
 import SensorsSelectedDevicePanel from "@/app/component/app-experience/SensorsSelectedDevicePanel";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experience/types";
+import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // Constants
 const ACTIVE_POLL_INTERVAL_MS = 1000; // Poll live data every 1 second when active
@@ -43,7 +43,7 @@ const TABS_ARRAY = Object.values(TABS);
 
 function SensorsPageContent() {
   // Page state with persistence
-  const { isReady, showVideo, skipVideo, replayIntro, activeTab, setActiveTab } = useExperienceState({
+  const { isReady, activeTab, setActiveTab } = useExperienceState({
     pageKey: "sensors",
     tabs: TABS_ARRAY,
     defaultTab: TABS.grid,
@@ -214,7 +214,7 @@ function SensorsPageContent() {
 
   // ─── Live Topology Polling ───────────────────────────────────────────
   useEffect(() => {
-    if (activeTab !== TABS.topology || showVideo || devices.length === 0) return;
+    if (activeTab !== TABS.topology || devices.length === 0) return;
 
     let cancelled = false;
     let timeoutId: NodeJS.Timeout;
@@ -399,7 +399,7 @@ function SensorsPageContent() {
       clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeTab, showVideo, devices.length]); // devices.length so we re-run once devices load
+  }, [activeTab, devices.length]);
 
   const getDeviceForSensor = (tin: string) => devices.find((d) => d.tin === tin);
 
@@ -420,10 +420,8 @@ function SensorsPageContent() {
     >
       <ThemedToaster accentColor={colors.sensorAccent} />
 
-      <VideoIntro show={showVideo} onSkip={skipVideo} />
-
       {/* Main Content */}
-      <div className={`flex flex-col flex-1 min-h-0 ${showVideo ? "opacity-0" : "opacity-100 transition-opacity duration-500"}`}>
+      <div className="flex flex-col flex-1 min-h-0">
         <SensorsHeader
           tabs={TABS_ARRAY}
           activeTab={activeTab}
@@ -432,7 +430,6 @@ function SensorsPageContent() {
           accentColor={colors.sensorAccent}
           onRefresh={refreshDevices}
           isRefreshing={isRefreshing}
-          onReplayIntro={replayIntro}
         />
 
         {/* Content Area */}
@@ -488,6 +485,7 @@ function SensorsPageContent() {
           </AppSheet>
         )}
       </div>
+      <VideoLibraryButton />
     </div>
   );
 }
