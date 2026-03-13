@@ -19,7 +19,7 @@ interface WarehouseIndoorPositioningTabProps {
 function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioningTabProps) {
   const [loading, setLoading] = useState(false);
   const { editor, onReady } = useFabricJSEditor();
-  const image = "/assets/Warehouse Layout Preview.svg";
+  const image = "/assets/Warehouse Layout Preview Black.jpg";
   const canvasRef = useRef<HTMLDivElement>(null);
   const [allAsset, setAllAsset] = useState<Asset[]>([]);
   const siteID = useSelector((state: any) => state.orgDetails.siteId);
