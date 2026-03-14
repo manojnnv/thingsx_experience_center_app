@@ -232,10 +232,10 @@ export function ArchitectureDiagram() {
               AI Satellites
             </h4>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              Edge Vision for Real time
+              Edge Vision for Real-time
             </p>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              Insights, navigations
+              Insights, Navigations
             </p>
           </div>
 
@@ -244,13 +244,13 @@ export function ArchitectureDiagram() {
               Endpoints/Sensors
             </h4>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              Sense Monitor and control
+              Sense, Monitor & Control
             </p>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              industrial equipment's and
+              Industrial equipments &
             </p>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              environment
+              Environment
             </p>
           </div>
 
@@ -259,7 +259,7 @@ export function ArchitectureDiagram() {
               Gateway
             </h4>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              Bridging protocols,
+              Bridging protocols &
             </p>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
               Enabling Communication
@@ -271,10 +271,10 @@ export function ArchitectureDiagram() {
               ThingsX Console:
             </h4>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              Unified hub for Device Control,
+              Unified hub for Device Control
             </p>
             <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>
-              & automation
+              & Automation
             </p>
           </div>
         </div>

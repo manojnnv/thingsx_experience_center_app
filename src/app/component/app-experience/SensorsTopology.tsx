@@ -201,7 +201,7 @@ function SensorsTopology({
           <p className="text-xs font-semibold mb-2" style={{ color: colors.yellow }}>Live Topology</p>
           <div className="flex flex-col gap-2 text-xs" style={{ color: colors.textMuted }}>
             <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2" style={{ borderColor: colors.yellow, backgroundColor: colors.backgroundCard }} /> Endnode</span>
-            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} /> Active sensor</span>
+            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.primary }} /> Active Sensor</span>
           </div>
         </div>
         <div className="absolute top-4 right-4 text-xs" style={{ color: colors.textMuted }}>Click a sensor to view details</div>
