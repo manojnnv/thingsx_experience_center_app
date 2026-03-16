@@ -9,7 +9,7 @@ export interface VideoEntry {
 export const VIDEO_LIBRARY: VideoEntry[] = [
   {
     id: "demo-1",
-    title: "Thingsx Retail Video",
+    title: "Thingsx Retail Video -1",
     url: "http://thingsx.home:8080/Demo_videos/THINGSX%20retail%20VIDEO%202209%201.1.mp4",
   },
   {
@@ -24,7 +24,7 @@ export const VIDEO_LIBRARY: VideoEntry[] = [
   },
   {
     id: "demo-4",
-    title: "Thingsx Computer Vision Video",
+    title: "Thingsx Computer Vision Video -2",
     url: "http://thingsx.home:8080/Demo_videos/ThingsX comp vision video.mp4",
   },
   {
