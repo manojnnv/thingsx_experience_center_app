@@ -907,19 +907,49 @@ function HeatmapView({
             </div>
           </AppTooltip>
         </div>
-        {tooltip.visible && (
-          <div className="absolute z-[100] pointer-events-none" style={{ left: tooltip.x, top: tooltip.y, transform: "translateY(-100%)" }}>
-            <div className="px-3 py-2 rounded-lg shadow-xl min-w-[140px]" style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}>
-              <div className="text-xs mb-1" style={{ color: colors.textMuted }}>Zone</div>
-              <div className="font-semibold text-sm truncate max-w-[180px]" style={{ color: colors.primary }}>{tooltip.zoneName}</div>
-              <div className="my-1.5" style={{ borderTop: `1px solid ${colors.border}` }}></div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs" style={{ color: colors.textMuted }}>{isProduct ? "Interactions" : "Visitors"}</span>
-                <span className="font-bold text-lg" style={{ color: colors.primary }}>{tooltip.count !== null ? tooltip.count : "—"}</span>
+        {tooltip.visible && (() => {
+          let productsList: any[] = [];
+          if (isProduct && tooltip.zoneId) {
+            const zidNum = tooltip.zoneId !== null && tooltip.zoneId !== undefined ? Number(tooltip.zoneId) : null;
+            const src = Array.isArray(heatMapData) ? heatMapData : (heatMapData as any)?.data ?? [];
+            productsList = (src as any[]).filter((item: any) => {
+              const pz = item?.zone_id ?? item?.zoneId ?? item?.zone ?? null;
+              if (pz === null || zidNum === null || isNaN(zidNum)) return false;
+              return Number(pz) === zidNum;
+            });
+          }
+
+          return (
+            <div className="absolute z-[100] pointer-events-none" style={{ left: tooltip.x, top: tooltip.y, transform: "translateY(-100%)" }}>
+              <div className="px-3 py-2 rounded-lg shadow-xl min-w-[140px] max-w-[280px]" style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}>
+                <div className="text-xs mb-1" style={{ color: colors.textMuted }}>Zone</div>
+                <div className="font-semibold text-sm truncate" style={{ color: colors.primary }}>{tooltip.zoneName}</div>
+                <div className="my-1.5" style={{ borderTop: `1px solid ${colors.border}` }}></div>
+                <div className="flex justify-between items-center gap-4">
+                  <span className="text-xs" style={{ color: colors.textMuted }}>{isProduct ? "Interactions" : "Visitors"}</span>
+                  <span className="font-bold text-lg" style={{ color: colors.primary }}>{tooltip.count !== null ? tooltip.count : "—"}</span>
+                </div>
+                {isProduct && productsList.length > 0 && (
+                  <div className="mt-2 pt-2" style={{ borderTop: `1px dashed ${colors.border}` }}>
+                    <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1.5 tracking-wider" style={{ color: colors.textMuted }}>Products in Zone</div>
+                    <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                      {productsList.map((p, idx) => (
+                        <div key={idx} className="flex justify-between items-start gap-2 p-1.5 rounded-md" style={{ backgroundColor: `${colors.text}08` }}>
+                          <span className="text-xs font-medium truncate flex-1" title={p.product_name ?? p.productName ?? "Unknown"}>
+                            {p.product_name ?? p.productName ?? "Unknown"}
+                          </span>
+                          <span className="text-xs font-bold leading-none flex-none pt-0.5" style={{ color: accent }}>
+                            {p.interaction_count ?? p.interactionCount ?? p.count ?? "-"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         <FabricJSCanvas
           className="sample-canvas border border-gray-300 rounded-md h-full w-full"
           onReady={onReady}
