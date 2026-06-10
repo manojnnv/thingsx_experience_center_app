@@ -5,6 +5,11 @@ import { colors } from "@/config/theme";
 import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
+// ─── Constants ──────────────────────────────────────────────────────────
+const STALE_THRESHOLD_MS = 300000; // 5m — sensor is "stale" if no fresh data
+const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
+
+// ─── Memoized Sensor Node (SVG) ────────────────────────────────────────
 interface MemoizedSensorNodeProps {
   sensorPos: { tin: string; x: number; y: number };
   sensorData: SensorLiveData;
@@ -82,14 +87,145 @@ const MemoizedSensorNode = React.memo(
     );
   },
   (prev, next) => {
-    return prev.sensorData.lastReceivedAt.getTime() === next.sensorData.lastReceivedAt.getTime() &&
-           prev.device?.icon === next.device?.icon;
+    // Referential equality: page.tsx preserves object identity for
+    // unchanged SensorLiveData entries, so === is the correct check.
+    return prev.sensorData === next.sensorData &&
+           prev.device === next.device &&
+           prev.onSelectDevice === next.onSelectDevice;
   }
 );
 
-// Row implementation moved directly into component to keep code simple, readable and easy to debug.
+// ─── Data Table (isolated from SVG, has its own tick for "Xs ago") ─────
+const SensorsDataTable = React.memo(function SensorsDataTable({
+  connectedSensors,
+  activeSensors,
+  getDeviceForSensor,
+  onSelectDevice,
+  categoryConfig,
+}: {
+  connectedSensors: Map<string, SensorLiveData>;
+  activeSensors: SensorLiveData[];
+  getDeviceForSensor: (tin: string) => DisplayDevice | undefined;
+  onSelectDevice: (device: DisplayDevice) => void;
+  categoryConfig: Record<string, { label?: string }>;
+}) {
+  // This tick is isolated here — it does NOT cause the SVG topology to re-render
+  const [currentTime, setCurrentTime] = React.useState(Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-function SensorsTopology({
+  const activeSensorCount = activeSensors.length;
+
+  return (
+    <div className="rounded-2xl overflow-hidden flex-[2] min-h-0 flex flex-col" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
+      <div className="p-3 border-b flex-none" style={{ borderColor: colors.border }}>
+        <h3 className="text-sm font-bold" style={{ color: colors.text }}>Connected Sensors - Real-time Data</h3>
+        <p className="text-xs" style={{ color: colors.textMuted }}>{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} actively transmitting</p>
+      </div>
+
+      {activeSensorCount === 0 ? (
+        <div className="p-4 text-center flex-1" style={{ color: colors.textMuted }}>
+          <p>No sensors are currently transmitting data.</p>
+          <p className="text-xs mt-1">Sensors will appear here when they send data.</p>
+        </div>
+      ) : (
+        <div className="overflow-auto flex-1 min-h-0">
+          <table className="w-full text-left" style={{ tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ backgroundColor: colors.background }}>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Sensor</th>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Type</th>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Last Data</th>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Current Value</th>
+                <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Trend (30s)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeSensors.map((sensor, idx) => {
+                const device = getDeviceForSensor(sensor.tin);
+                const history = sensor.history || [];
+                const tableOpts = { category: sensor.category };
+                const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
+                const displayCurrent = sensor.value !== null ? sensor.value : lastKnownGood;
+                
+                // Fix negative "Last Data" time server-client drift
+                const timeSinceData = Math.max(0, Math.floor((currentTime - sensor.lastReceivedAt.getTime()) / 1000));
+
+                // Fix trend inconsistencies: align numerical trend perfectly with visible 15-frame sparkline
+                const recentHistory = history.slice(-15);
+                const trend = recentHistory.length > 1 ? recentHistory[recentHistory.length - 1] - recentHistory[0] : 0;
+                
+                // Always render exactly 15 bars in the sparkline to avoid column jumps
+                const paddedHistory = [...Array(Math.max(0, 15 - recentHistory.length)).fill(null), ...recentHistory];
+                
+                // Keep code clean by extracting secondary fields map inline locally
+                const secondaryFields = sensor.fields 
+                  ? Object.entries(sensor.fields)
+                      .slice(1)
+                      .map(([k, v]) => {
+                        const safeVal = v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : null;
+                        return `${k.replace(/_/g, " ")}: ${safeVal !== null ? safeVal.toFixed(1) : "—"}`;
+                      })
+                      .join(" | ")
+                  : null;
+
+                return (
+                  <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
+                    <td className="px-3 py-2 w-1/4">
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
+                        <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 w-1/6"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
+                    <td className="px-3 py-2 w-1/6"><span className="text-sm font-medium" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
+                    <td className="px-3 py-2 w-1/4">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-base font-bold" style={{ color: colors.yellow }}>
+                          {displayCurrent != null ? displayCurrent.toFixed(1) : "—"}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
+                        </span>
+                        {secondaryFields && (
+                          <p className="text-xs font-medium" style={{ color: colors.textMuted }}>
+                            {secondaryFields}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 w-1/6">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-20 flex items-end gap-px">
+                          {paddedHistory.map((val, i) => {
+                            if (val === null) return <div key={i} className="flex-1 rounded-t" style={{ height: "10%", backgroundColor: colors.yellow, opacity: 0.1 }} />;
+                            const min = Math.min(...recentHistory);
+                            const max = Math.max(...recentHistory);
+                            const range = max - min || 1;
+                            const height = ((val - min) / range) * 100;
+                            return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
+                          })}
+                        </div>
+                        <span className="text-xs font-medium flex items-center" style={{ color: trend > 0 ? colors.primary : trend < 0 ? "#ff6b6b" : colors.textMuted }}>
+                          {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{Math.abs(trend).toFixed(1)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ─── Main Topology Component ───────────────────────────────────────────
+// Wrapped in React.memo — only re-renders when props change (i.e., new API data)
+// NO timers, NO intervals — purely data-driven rendering.
+
+function SensorsTopologyInner({
   devices,
   connectedSensors,
   getDeviceForSensor,
@@ -104,38 +240,51 @@ function SensorsTopology({
   centralEndnode: { displayName: string };
   categoryConfig: Record<string, { label?: string }>;
 }) {
-  const STALE_THRESHOLD_MS = 15000; // 15s — sensor is "stale" if no fresh data
-  const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
-
-  // Tick every second to ensure "timeSinceData" updates even when exactly no new sensor values arrive.
-  const [, setTick] = React.useState(0);
-  React.useEffect(() => {
-    const timer = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const isVisibleSensor = (s: SensorLiveData) => {
+  // Compute active sensors from data — NO timer needed.
+  // This runs only when connectedSensors changes (i.e., new API data).
+  const isVisibleSensor = React.useCallback((s: SensorLiveData) => {
     if (Date.now() - s.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) return false;
     const d = getDeviceForSensor(s.tin);
     return !d || !HIDDEN_CATEGORIES.has(d.category);
-  };
+  }, [getDeviceForSensor]);
 
-  // Count sensors that have fresh data (excluding hidden categories)
-  const activeSensorCount = Array.from(connectedSensors.values()).filter(isVisibleSensor).length;
+  const isSensorActive = React.useCallback((tin: string) => {
+    const sensorData = connectedSensors.get(tin);
+    if (!sensorData) return false;
+    return Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
+  }, [connectedSensors]);
 
-  // Fixed positions for EVERY configured device — layout never shifts
-  const sensorPositions = devices.map((device, i) => {
-    const angle = (i / Math.max(devices.length, 1)) * 2 * Math.PI - Math.PI / 2;
-    return {
-      tin: device.tin,
-      x: 50 + 35 * Math.cos(angle),
-      y: 50 + 35 * Math.sin(angle),
-    };
-  });
+  // Memoize active sensor list — stable ref unless connectedSensors changes
+  const activeSensors = React.useMemo(
+    () => Array.from(connectedSensors.values()).filter(isVisibleSensor),
+    [connectedSensors, isVisibleSensor]
+  );
+
+  const activeSensorCount = activeSensors.length;
+
+  // Fixed positions for EVERY configured device — layout never shifts.
+  // Only recomputes when the device list itself changes.
+  const sensorPositions = React.useMemo(
+    () => devices.map((device, i) => {
+      const angle = (i / Math.max(devices.length, 1)) * 2 * Math.PI - Math.PI / 2;
+      return {
+        tin: device.tin,
+        x: 50 + 35 * Math.cos(angle),
+        y: 50 + 35 * Math.sin(angle),
+      };
+    }),
+    [devices]
+  );
+
+  // Pre-compute displayOpts per TIN — avoids creating new object literals in the render loop
+  const displayOptsMap = React.useMemo(
+    () => new Map(devices.map((d) => [d.tin, { category: d.category }])),
+    [devices]
+  );
 
   return (
     <div className="flex flex-col gap-2 h-full overflow-hidden">
-      {/* Topology SVG */}
+      {/* Topology SVG — purely data-driven, NO timers */}
       <div className="relative w-full flex-[3] min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
         <svg viewBox="0 0 100 100" className="w-full h-full">
           <defs>
@@ -150,9 +299,7 @@ function SensorsTopology({
 
           {/* Lines from Endnode to active sensors only */}
           {sensorPositions.map((sensorPos) => {
-            const sensorData = connectedSensors.get(sensorPos.tin);
-            const isActive = sensorData && Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
-            if (!isActive) return null;
+            if (!isSensorActive(sensorPos.tin)) return null;
 
             return (
               <line
@@ -178,10 +325,9 @@ function SensorsTopology({
           {sensorPositions.map((sensorPos) => {
             const sensorData = connectedSensors.get(sensorPos.tin);
             const device = getDeviceForSensor(sensorPos.tin);
-            const isActive = sensorData && Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
-            if (!isActive || !sensorData) return null;
+            if (!isSensorActive(sensorPos.tin) || !sensorData) return null;
 
-            const displayOpts = { category: device?.category };
+            const displayOpts = displayOptsMap.get(sensorPos.tin) || { category: device?.category };
 
             return (
               <MemoizedSensorNode
@@ -207,110 +353,18 @@ function SensorsTopology({
         <div className="absolute top-4 right-4 text-xs" style={{ color: colors.textMuted }}>Click a sensor to view details</div>
       </div>
 
-      {/* Real-time Data Table */}
-      <div className="rounded-2xl overflow-hidden flex-[2] min-h-0 flex flex-col" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
-        <div className="p-3 border-b flex-none" style={{ borderColor: colors.border }}>
-          <h3 className="text-sm font-bold" style={{ color: colors.text }}>Connected Sensors - Real-time Data</h3>
-          <p className="text-xs" style={{ color: colors.textMuted }}>{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} actively transmitting</p>
-        </div>
-
-        {activeSensorCount === 0 ? (
-          <div className="p-4 text-center flex-1" style={{ color: colors.textMuted }}>
-            <p>No sensors are currently transmitting data.</p>
-            <p className="text-xs mt-1">Sensors will appear here when they send data.</p>
-          </div>
-        ) : (
-          <div className="overflow-auto flex-1 min-h-0">
-            <table className="w-full text-left" style={{ tableLayout: "fixed" }}>
-              <thead>
-                <tr style={{ backgroundColor: colors.background }}>
-                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Sensor</th>
-                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Type</th>
-                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Last Data</th>
-                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/4" style={{ color: colors.textMuted }}>Current Value</th>
-                  <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wider w-1/6" style={{ color: colors.textMuted }}>Trend (30s)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(connectedSensors.values())
-                  .filter(isVisibleSensor)
-                  .map((sensor, idx) => {
-                    const device = getDeviceForSensor(sensor.tin);
-                    const history = sensor.history || [];
-                    const tableOpts = { category: sensor.category };
-                    const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
-                    const displayCurrent = sensor.value !== null ? sensor.value : lastKnownGood;
-                    
-                    // Fix negative "Last Data" time server-client drift
-                    const timeSinceData = Math.max(0, Math.floor((new Date().getTime() - sensor.lastReceivedAt.getTime()) / 1000));
-
-                    // Fix trend inconsistencies: align numerical trend perfectly with visible 15-frame sparkline
-                    const recentHistory = history.slice(-15);
-                    const trend = recentHistory.length > 1 ? recentHistory[recentHistory.length - 1] - recentHistory[0] : 0;
-                    
-                    // Always render exactly 15 bars in the sparkline to avoid column jumps
-                    const paddedHistory = [...Array(Math.max(0, 15 - recentHistory.length)).fill(null), ...recentHistory];
-                    
-                    // Keep code clean by extracting secondary fields map inline locally
-                    const secondaryFields = sensor.fields 
-                      ? Object.entries(sensor.fields)
-                          .slice(1)
-                          .map(([k, v]) => {
-                            const safeVal = v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : null;
-                            return `${k.replace(/_/g, " ")}: ${safeVal !== null ? safeVal.toFixed(1) : "—"}`;
-                          })
-                          .join(" | ")
-                      : null;
-
-                    return (
-                      <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
-                        <td className="px-3 py-2 w-1/4">
-                          <div>
-                            <p className="text-sm font-medium" style={{ color: colors.text }}>{sensor.displayName}</p>
-                            <p className="text-xs font-mono" style={{ color: colors.textMuted }}>{sensor.tin}</p>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 w-1/6"><span className="text-sm" style={{ color: colors.text }}>{categoryConfig[sensor.category]?.label || sensor.category}</span></td>
-                        <td className="px-3 py-2 w-1/6"><span className="text-sm font-medium" style={{ color: timeSinceData > 5 ? colors.textMuted : colors.primary }}>{timeSinceData}s ago</span></td>
-                        <td className="px-3 py-2 w-1/4">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-base font-bold" style={{ color: colors.yellow }}>
-                              {displayCurrent != null ? displayCurrent.toFixed(1) : "—"}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
-                            </span>
-                            {secondaryFields && (
-                              <p className="text-xs font-medium" style={{ color: colors.textMuted }}>
-                                {secondaryFields}
-                              </p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 w-1/6">
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-20 flex items-end gap-px">
-                              {paddedHistory.map((val, i) => {
-                                if (val === null) return <div key={i} className="flex-1 rounded-t" style={{ height: "10%", backgroundColor: colors.yellow, opacity: 0.1 }} />;
-                                const min = Math.min(...recentHistory);
-                                const max = Math.max(...recentHistory);
-                                const range = max - min || 1;
-                                const height = ((val - min) / range) * 100;
-                                return <div key={i} className="flex-1 rounded-t" style={{ height: `${Math.max(10, height)}%`, backgroundColor: colors.yellow, opacity: 0.3 + (i / 15) * 0.7 }} />;
-                              })}
-                            </div>
-                            <span className="text-xs font-medium flex items-center" style={{ color: trend > 0 ? colors.primary : trend < 0 ? "#ff6b6b" : colors.textMuted }}>
-                              {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}{Math.abs(trend).toFixed(1)}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Data table — has its own isolated tick, does NOT affect SVG */}
+      <SensorsDataTable
+        connectedSensors={connectedSensors}
+        activeSensors={activeSensors}
+        getDeviceForSensor={getDeviceForSensor}
+        onSelectDevice={onSelectDevice}
+        categoryConfig={categoryConfig}
+      />
     </div>
   );
 }
+
+const SensorsTopology = React.memo(SensorsTopologyInner);
 
 export default SensorsTopology;

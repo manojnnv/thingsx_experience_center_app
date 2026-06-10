@@ -84,9 +84,29 @@ const getCountValue = (item: ZoneHeatmapData | ProductInteractionData): number |
   return Number.isFinite(n) ? n : null;
 };
 
+const retrieveDwellingTime = async (params: {
+  siteId: string;
+  startDate?: string;
+  endDate?: string;
+  aggregation?: string;
+}): Promise<ServiceResult<any[]>> => {
+  try {
+    const resp = await api.post("/v1/metrics/dwelling_time", {
+      site_id: params.siteId || localStorage.getItem("site_id"),
+      from_date: params.startDate,
+      to_date: params.endDate,
+      aggregation: params.aggregation || "avg",
+    });
+    return ok(resp?.data?.data || []);
+  } catch (error) {
+    return fail(getErrorMessage(error, "Failed to load dwelling time"));
+  }
+};
+
 export {
   zoneCountHeatMap,
   productInteraction,
+  retrieveDwellingTime,
   normalizeHeatmapData,
   calculateHeatmapRange,
   getCountValue,

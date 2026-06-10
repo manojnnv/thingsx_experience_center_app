@@ -9,7 +9,7 @@ import AppTooltip from "@/app/component/app-tooltip/AppTooltip";
 import AppIconButton from "@/app/component/app-icon-button/AppIconButton";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
-import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatmap";
+import { zoneCountHeatMap, productInteraction, retrieveDwellingTime } from "@/app/services/heatmap/heatmap";
 import { getLayout } from "@/lib/layout";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
@@ -78,6 +78,8 @@ function HeatmapView({
   const [heatMapData, setHeatMapData] = useState<any[]>([]);
   const heatMapDataRef = useRef<any[]>([]);
   const allAggregatedDataRef = useRef<any[]>([]);
+  const allZoneDataRef = useRef<any[]>([]);
+  const allDwellingDataRef = useRef<any[]>([]);
   const segmentWindowsRef = useRef<{ start: string; end: string }[]>([]);
   const layoutLoadedRef = useRef(false);
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
@@ -88,6 +90,8 @@ function HeatmapView({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeSegment, setActiveSegment] = useState<number | null>(null);
   const [segmentDataMap, setSegmentDataMap] = useState<Map<number, any[]>>(new Map());
+  const [segmentZoneDataMap, setSegmentZoneDataMap] = useState<Map<number, any[]>>(new Map());
+  const [segmentDwellingDataMap, setSegmentDwellingDataMap] = useState<Map<number, any[]>>(new Map());
   const [segmentIntensities, setSegmentIntensities] = useState<number[]>([]);
   const [segmentLabels, setSegmentLabels] = useState<string[]>([]);
   const [tooltip, setTooltip] = useState<{
@@ -724,6 +728,8 @@ function HeatmapView({
       setLoading(true);
       setActiveSegment(null);
       setSegmentDataMap(new Map());
+      setSegmentZoneDataMap(new Map());
+      setSegmentDwellingDataMap(new Map());
       setSegmentIntensities([]);
       setSegmentLabels([]);
       segmentWindowsRef.current = [];
@@ -760,19 +766,21 @@ function HeatmapView({
       setSegmentIntensities(new Array(windows.length).fill(0));
 
       const siteID = getSiteId();
-      const apiCall = isProduct ? productInteraction : zoneCountHeatMap;
-      const response = await apiCall({ siteId: siteID, startDate: startDateISO, endDate: endDateISO });
+      
+      const zoneRespPromise = zoneCountHeatMap({ siteId: siteID, startDate: startDateISO, endDate: endDateISO });
+      const productRespPromise = isProduct ? productInteraction({ siteId: siteID, startDate: startDateISO, endDate: endDateISO }) : Promise.resolve({ data: [] });
+      const dwellRespPromise = !isProduct ? retrieveDwellingTime({ siteId: siteID, startDate: startDateISO, endDate: endDateISO }) : Promise.resolve({ data: [] });
 
-      if (response.error) {
-        console.warn("Failed to load heatmap:", response.error);
-        setHeatMapData([]);
-        return;
-      }
+      const [zoneResp, productResp, dwellResp] = await Promise.all([zoneRespPromise, productRespPromise, dwellRespPromise]);
 
-      const allData = response.data || [];
-      allAggregatedDataRef.current = allData;
-      heatMapDataRef.current = allData;
-      setHeatMapData(allData);
+      const zoneData = zoneResp.data || [];
+      const primaryData = isProduct ? (productResp?.data || []) : zoneData;
+      
+      allZoneDataRef.current = zoneData;
+      allDwellingDataRef.current = dwellResp?.data || [];
+      allAggregatedDataRef.current = primaryData;
+      heatMapDataRef.current = primaryData;
+      setHeatMapData(primaryData);
     } finally {
       setLoading(false);
     }
@@ -797,22 +805,33 @@ function HeatmapView({
     const window = segmentWindowsRef.current[index];
     if (!window) return;
 
-    const apiCall = isProduct ? productInteraction : zoneCountHeatMap;
-    const response = await apiCall({
-      siteId: getSiteId(),
-      startDate: window.start,
-      endDate: window.end,
-    });
+    const zoneRespPromise = zoneCountHeatMap({ siteId: getSiteId(), startDate: window.start, endDate: window.end });
+    const productRespPromise = isProduct ? productInteraction({ siteId: getSiteId(), startDate: window.start, endDate: window.end }) : Promise.resolve({ data: [], error: undefined });
+    const dwellRespPromise = !isProduct ? retrieveDwellingTime({ siteId: getSiteId(), startDate: window.start, endDate: window.end }) : Promise.resolve({ data: [], error: undefined });
 
-    const data = (!response.error && response.data) ? response.data : [];
+    const [zoneResp, productResp, dwellResp] = await Promise.all([zoneRespPromise, productRespPromise, dwellRespPromise]);
+
+    const zoneData = (!zoneResp.error && zoneResp.data) ? zoneResp.data : [];
+    const primaryData = isProduct ? ((!(productResp as any)?.error && productResp?.data) ? productResp.data : []) : zoneData;
+    const dwellData = (!(dwellResp as any)?.error && dwellResp?.data) ? dwellResp.data : [];
 
     setSegmentDataMap((prev) => {
       const next = new Map(prev);
-      next.set(index, data);
+      next.set(index, primaryData);
+      return next;
+    });
+    setSegmentZoneDataMap((prev) => {
+      const next = new Map(prev);
+      next.set(index, zoneData);
+      return next;
+    });
+    setSegmentDwellingDataMap((prev) => {
+      const next = new Map(prev);
+      next.set(index, dwellData);
       return next;
     });
 
-    const total = data.reduce((sum: number, item: any) => {
+    const total = primaryData.reduce((sum: number, item: any) => {
       const v = getCountValue(item);
       return sum + (v ?? 0);
     }, 0);
@@ -822,8 +841,8 @@ function HeatmapView({
       return next;
     });
 
-    heatMapDataRef.current = data;
-    setHeatMapData(data);
+    heatMapDataRef.current = primaryData;
+    setHeatMapData(primaryData);
   }, [segmentDataMap, isProduct]);
 
   const handleShowAll = useCallback(() => {
@@ -963,11 +982,40 @@ function HeatmapView({
       <AppSheet
         open={isDrawerOpen}
         onOpenChange={setIsDrawerOpen}
-        title={
-          isProduct
-            ? `Product Interaction for ${selectedZone.name ?? "Zone"} zone.`
-            : `Retail Analytics for ${selectedZone.name ?? "Zone"}`
-        }
+        title={(() => {
+          let suffix = "";
+          if (activeSegment !== null && segmentWindowsRef.current[activeSegment]) {
+            const window = segmentWindowsRef.current[activeSegment];
+            const s = new Date(window.start);
+            const e = new Date(window.end);
+            const dateOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+            const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "numeric", hour12: true };
+            
+            // If the segment is 24 hours, it might be exactly a full day
+            if (e.getTime() - s.getTime() === 86400000) {
+              suffix = s.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            } else {
+              suffix = `${s.toLocaleDateString("en-US", dateOpts)} (${s.toLocaleTimeString("en-US", timeOpts)} - ${e.toLocaleTimeString("en-US", timeOpts)})`;
+            }
+          } else {
+            if (dateAndTime[0] && dateAndTime[1]) {
+              const s = new Date(dateAndTime[0]);
+              const e = new Date(dateAndTime[1]);
+              const dateOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+              if (s.toDateString() === e.toDateString() || (e.getTime() - s.getTime() <= 86400000 && s.getHours() === 0)) {
+                suffix = s.toLocaleDateString("en-US", dateOpts);
+              } else {
+                suffix = `${s.toLocaleDateString("en-US", dateOpts)} to ${e.toLocaleDateString("en-US", dateOpts)}`;
+              }
+            }
+          }
+
+          const baseTitle = isProduct
+            ? `Product Interaction for ${selectedZone.name ?? "Zone"} zone`
+            : `Retail Analytics for ${selectedZone.name ?? "Zone"}`;
+
+          return suffix ? `${baseTitle} - ${suffix}` : baseTitle;
+        })()}
         footer={(() => {
           const ZONE_CAMERA_MAP: Record<string, string> = {
             "daily essentials": "Shopping_Area_CAM7",
@@ -1015,25 +1063,40 @@ function HeatmapView({
           ) : isProduct && Array.isArray(selectedZoneData) ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {selectedZoneData.map((p: any, idx: number) => {
-                // Safely extract demographics. Sometimes it's nested or stringified depending on API changes
+                // Find the zone data from allZoneDataRef or segmentZoneDataMap to get demographics
+                const currentZoneDataArr = activeSegment !== null ? (segmentZoneDataMap.get(activeSegment) || []) : allZoneDataRef.current;
+                const zidNum = selectedZone.id ? Number(selectedZone.id) : null;
+                const zoneMatch = currentZoneDataArr.find((z: any) => {
+                  const pz = z?.zone_id ?? z?.zoneId ?? z?.id ?? null;
+                  return pz !== null && Number(pz) === zidNum;
+                });
+
                 let demographics: any = {};
-                if (p.demographics && typeof p.demographics === "object") demographics = p.demographics;
-                else if (p.demo && typeof p.demo === "object") demographics = p.demo;
-                else if (typeof p.demographics === "string") {
-                  try { demographics = JSON.parse(p.demographics); } catch { }
+                if (zoneMatch?.demographics && typeof zoneMatch.demographics === "object") demographics = zoneMatch.demographics;
+                else if (zoneMatch?.demo && typeof zoneMatch.demo === "object") demographics = zoneMatch.demo;
+                else if (typeof zoneMatch?.demographics === "string") {
+                  try { demographics = JSON.parse(zoneMatch.demographics); } catch { }
+                }
+
+                // Fallback to product demographics if zone is empty
+                if (Object.keys(demographics).length === 0) {
+                  if (p.demographics && typeof p.demographics === "object") demographics = p.demographics;
+                  else if (p.demo && typeof p.demo === "object") demographics = p.demo;
+                  else if (typeof p.demographics === "string") {
+                    try { demographics = JSON.parse(p.demographics); } catch { }
+                  }
                 }
 
                 // The API can return exact strings like "AGE Category" or "Gender" at the root level of demographics.
-                // Or sometimes it's nested under demo. We need to be careful with casing.
                 let ageObj = demographics?.["AGE Category"] ?? demographics?.ageCategory ?? demographics?.age ?? demographics?.["Age Category"] ?? {};
                 let genderObj = demographics?.["Gender"] ?? demographics?.gender ?? {};
 
                 // If it's totally empty but the root object has them (flattened API response)
-                if (Object.keys(ageObj).length === 0 && (p["AGE Category"] || p.ageCategory)) {
-                  ageObj = p["AGE Category"] ?? p.ageCategory;
+                if (Object.keys(ageObj).length === 0 && (zoneMatch?.["AGE Category"] || zoneMatch?.ageCategory || p["AGE Category"] || p.ageCategory)) {
+                  ageObj = zoneMatch?.["AGE Category"] ?? zoneMatch?.ageCategory ?? p["AGE Category"] ?? p.ageCategory;
                 }
-                if (Object.keys(genderObj).length === 0 && (p["Gender"] || p.gender)) {
-                  genderObj = p["Gender"] ?? p.gender;
+                if (Object.keys(genderObj).length === 0 && (zoneMatch?.["Gender"] || zoneMatch?.gender || p["Gender"] || p.gender)) {
+                  genderObj = zoneMatch?.["Gender"] ?? zoneMatch?.gender ?? p["Gender"] ?? p.gender;
                 }
 
                 const renderBreakdown = (obj: any) => {
@@ -1184,9 +1247,23 @@ function HeatmapView({
                       </div>
 
                       {/* Right Side: Primary Metric */}
-                      <div className="col-span-2 flex flex-col justify-center items-center rounded-lg p-2" style={{ backgroundColor: `${accent}15` }}>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Visitors</div>
-                        <div className="text-3xl font-black mt-1" style={{ color: accent }}>{zData.visitor_count ?? "-"}</div>
+                      <div className="col-span-2 flex flex-col gap-2">
+                        <div className="flex flex-col justify-center items-center rounded-lg p-2 flex-1" style={{ backgroundColor: `${accent}15` }}>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Visitors</div>
+                          <div className="text-3xl font-black mt-1" style={{ color: accent }}>{zData.visitor_count ?? "-"}</div>
+                        </div>
+                        {(() => {
+                          const currentDwellDataArr = activeSegment !== null ? (segmentDwellingDataMap.get(activeSegment) || []) : allDwellingDataRef.current;
+                          const zoneName = zData.zone_name ?? selectedZone.name;
+                          const dwellMatch = currentDwellDataArr.find((d: any) => d["ZONE NAME"] === zoneName || d.zone_name === zoneName);
+                          const dwellingTimeStr = dwellMatch?.["DWELLING TIME"] ?? dwellMatch?.dwelling_time ?? "-";
+                          return (
+                            <div className="flex flex-col justify-center items-center rounded-lg p-2 flex-1" style={{ backgroundColor: `${accent}15` }}>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Dwelling Time</div>
+                              <div className="text-xl font-black mt-1" style={{ color: accent }}>{dwellingTimeStr}</div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

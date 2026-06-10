@@ -30,9 +30,9 @@ import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experien
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // Constants
-const ACTIVE_POLL_INTERVAL_MS = 1000; // Poll live data every 1 second when active
+const ACTIVE_POLL_INTERVAL_MS = 2000; // Poll live data every 2 seconds when active
 const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
-const STALE_THRESHOLD_MS = 15000; // Sensor considered inactive if no data in 15s
+const STALE_THRESHOLD_MS = 300000; // Sensor considered inactive if no data in 5 minutes
 
 const TABS = {
   grid: "Component Matrix",
@@ -65,6 +65,10 @@ function SensorsPageContent() {
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Stable TINs ref for polling — avoids re-mounting the polling effect when
+  // device metadata changes. Updated once after initial device load.
+  const pollTinsRef = useRef<string[]>([]);
 
   // Initialize devices from config
   const loadDevices = React.useCallback(async (isRefresh = false) => {
@@ -166,6 +170,10 @@ function SensorsPageContent() {
       });
 
       setDevices(deviceListWithReadings);
+      // Populate stable TINs ref for polling, excluding load_cell and addressable_rgb
+      pollTinsRef.current = deviceListWithReadings
+        .filter((d) => d.category !== "load_cell" && d.category !== "addressable_rgb")
+        .map((d) => d.tin);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -200,10 +208,10 @@ function SensorsPageContent() {
   }, [deviceParam, devices, selectedDevice?.tin]);
 
   // Helper to select a device (updates both state and URL)
-  const handleSelectDevice = (device: DisplayDevice | null) => {
+  const handleSelectDevice = React.useCallback((device: DisplayDevice | null) => {
     setSelectedDevice(device);
     setDeviceParam(device?.tin ?? null);
-  };
+  }, [setDeviceParam]);
 
   // Helper to close the sheet (clears both state and URL)
   const handleCloseSheet = () => {
@@ -214,17 +222,22 @@ function SensorsPageContent() {
 
   // ─── Live Topology Polling ───────────────────────────────────────────
   useEffect(() => {
-    if (activeTab !== TABS.topology || devices.length === 0) return;
+    if (activeTab !== TABS.topology || pollTinsRef.current.length === 0) return;
 
     let cancelled = false;
     let timeoutId: NodeJS.Timeout;
+    let abortController: AbortController | null = null;
 
     const doPollContent = async () => {
-      const tins = devices.map((d) => d.tin);
+      // Abort any previous in-flight request to prevent overlapping responses
+      if (abortController) abortController.abort();
+      abortController = new AbortController();
+
+      const tins = pollTinsRef.current;
       const result = await fetchLatestSensorData(tins);
       if (cancelled || result.error || !result.data) return;
 
-      const payload = result.data; // { TIN: { metric: { value, timestamp } } }
+      const payload = result.data;
       const now = Date.now();
 
       // Build a fingerprint string per TIN so we can detect actual changes
@@ -244,7 +257,7 @@ function SensorsPageContent() {
 
       Object.entries(payload).forEach(([tin, metrics]) => {
         const config = sensorsDeviceTins.find((c) => c.tin === tin);
-        if (!config) return; // not one of our configured sensors
+        if (!config) return;
 
         const category = config.category || "sensor";
         const catInfo = categoryConfig[category] || { label: "Sensor", unit: "" };
@@ -254,7 +267,6 @@ function SensorsPageContent() {
 
         const sanitizeOpts = { category, metric: "" };
         const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v));
-        // Build fields: valid → sanitized value; invalid → 0 for storage (display can use LKG per field later)
         const fields: Record<string, { value: number; timestamp?: string }> = {};
         metricEntries.forEach(([key, m]) => {
           const rawVal = toNum((m as { value?: unknown }).value);
@@ -272,9 +284,9 @@ function SensorsPageContent() {
         const primaryValue: number | null = primaryValid
           ? sanitizeSensorValue(firstNum, { ...sanitizeOpts, metric: firstKey })
           : null;
-        const ts = new Date(first.timestamp);
+        const ts = new Date(first.timestamp.replace(" ", "T"));
 
-        // Fingerprint: use "invalid" for primary when null so we don't churn
+        // Fingerprint
         const fpParts = Object.entries(fields)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([, f]) => `${f.value.toFixed(4)}|${first.timestamp}`);
@@ -286,7 +298,7 @@ function SensorsPageContent() {
           hasChanges = true;
         }
 
-        // If any metric looks like a hex color (LED/RGB), use for valueDisplay
+        // Hex color for LED/RGB
         let valueDisplay: string | undefined;
         for (const [, m] of metricEntries) {
           const raw = String((m as any).value ?? "");
@@ -308,30 +320,43 @@ function SensorsPageContent() {
         });
       });
 
-      // Also detect removals (a TIN that was present is now gone)
+      // Detect removals
       lastValuesRef.current.forEach((_, tin) => {
         if (!nextFingerprints.has(tin)) hasChanges = true;
       });
 
-      if (!hasChanges) return; // nothing changed, skip render
+      if (!hasChanges) return;
 
       // Commit fingerprints
       lastValuesRef.current = nextFingerprints;
 
-      // Update connectedSensors map
+      // Surgical merge: only create new SensorLiveData objects for TINs whose
+      // fingerprint actually changed.
       setConnectedSensors((prev) => {
-        const updated = new Map<string, SensorLiveData>();
+        let mapChanged = false;
+        const updated = new Map(prev);
 
         newEntries.forEach((entry) => {
           const existing = prev.get(entry.tin);
           const history = existing?.history || [];
           const isActive = now - entry.timestamp.getTime() < STALE_THRESHOLD_MS;
-          // Only append to history when the current reading is valid so trends stay correct
           const newHistory =
             isActive && entry.value !== null
               ? [...history, entry.value].slice(-30)
               : history;
 
+          // Preserve identity if data hasn't changed
+          if (
+            existing &&
+            existing.value === entry.value &&
+            existing.lastReceivedAt.getTime() === entry.timestamp.getTime() &&
+            existing.history.length === newHistory.length &&
+            existing.unit === entry.unit
+          ) {
+            return;
+          }
+
+          mapChanged = true;
           updated.set(entry.tin, {
             tin: entry.tin,
             value: entry.value,
@@ -345,31 +370,15 @@ function SensorsPageContent() {
           });
         });
 
-        return updated;
-      });
-
-      // Update device statuses
-      setDevices((prev) => {
-        let changed = false;
-        const next = prev.map((device) => {
-          const entry = newEntries.find((e) => e.tin === device.tin);
-          if (!entry) return device;
-          const isActive = now - entry.timestamp.getTime() < STALE_THRESHOLD_MS;
-          const newStatus = isActive ? "online" : "offline";
-          const lastReading = entry.value !== null ? entry.value : device.lastReading;
-          if (device.status !== newStatus || device.lastReading !== lastReading) {
-            changed = true;
-            return {
-              ...device,
-              status: newStatus as "online" | "offline",
-              lastReading,
-              unit: entry.unit || device.unit,
-              lastReceivedAt: entry.timestamp,
-            };
+        // Remove TINs no longer present
+        prev.forEach((_, tin) => {
+          if (!nextFingerprints.has(tin)) {
+            updated.delete(tin);
+            mapChanged = true;
           }
-          return device;
         });
-        return changed ? next : prev;
+
+        return mapChanged ? updated : prev;
       });
     };
 
@@ -397,11 +406,26 @@ function SensorsPageContent() {
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
+      if (abortController) abortController.abort();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeTab, devices.length]);
 
-  const getDeviceForSensor = (tin: string) => devices.find((d) => d.tin === tin);
+  // O(1) lookup map — stable reference as long as `devices` doesn't change
+  const devicesByTin = React.useMemo(
+    () => new Map(devices.map((d) => [d.tin, d])),
+    [devices]
+  );
+  const getDeviceForSensor = React.useCallback(
+    (tin: string) => devicesByTin.get(tin),
+    [devicesByTin]
+  );
+
+  // Pre-filtered device list for topology — avoids creating new array on every render
+  const topologyDevices = React.useMemo(
+    () => devices.filter((d) => d.category !== "load_cell" && d.category !== "addressable_rgb"),
+    [devices]
+  );
 
   // Show minimal loading state until localStorage check is complete
   if (!isReady) {
@@ -452,7 +476,7 @@ function SensorsPageContent() {
           {!loading && activeTab === TABS.topology && (
             <div className="h-full">
               <SensorsTopology
-                devices={devices.filter((d) => d.category !== "load_cell" && d.category !== "addressable_rgb")}
+                devices={topologyDevices}
                 connectedSensors={connectedSensors}
                 getDeviceForSensor={getDeviceForSensor}
                 onSelectDevice={handleSelectDevice}
