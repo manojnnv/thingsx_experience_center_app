@@ -82,3 +82,25 @@ export const passiveAssetTracking = async (params: {
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 };
+
+/**
+ * Passive asset tracking – experience-center roadmap variant
+ * Used to power the journey roadmap view in the Passive Tracking tab.
+ */
+export const passiveAssetTrackingRoadmap = async (params: {
+  asset_id: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  try {
+    const resp = await api.post("/v1/asset/passive-tracking-experience-center", {
+      asset_id: params.asset_id,
+      start_date: params.startDate,
+      end_date: params.endDate,
+    });
+    toast.message(resp?.data?.message);
+    return resp?.data?.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+};
