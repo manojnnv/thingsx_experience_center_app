@@ -39,7 +39,7 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0001000011", displayName: "Temp (BME680)", category: "temperature" },
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
   { tin: "SN0007000003", displayName: "Light Intensity", category: "light" },
-  { tin: "SN0007000007", displayName: "Light Intensity", category: "light" }
+  { tin: "SN0007000007", displayName: "Light Intensity", category: "light" },
   { tin: "SN0007000005", displayName: "Light Intensity", category: "light" },
   { tin: "SN0023000001", displayName: "DPS310", category: "pressure" },
   { tin: "SN0031000001", displayName: "Magnetometer", category: "magnetometer" },
