@@ -34,6 +34,7 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0013000004", displayName: "Temp Probe", category: "temperature_probe" },
   { tin: "SN0002000001", displayName: "Accelerometer", category: "accelerometer" },
   { tin: "SN0001000010", displayName: "Temp (BME680)", category: "temperature" },
+  { tin: "SN0006000002", displayName: "MQ6 Gas Sensor", category: "gas_sensor" },
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
   { tin: "SN0007000007", displayName: "Light Intensity", category: "light" },
   { tin: "SN0023000001", displayName: "DPS310", category: "pressure" },
