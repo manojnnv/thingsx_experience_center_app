@@ -6,7 +6,7 @@
  */
 
 import { api } from "@/app/utils/api";
-import { sensorsDeviceTins, getSensorTins, categoryConfig, categoryToLogo, LOGOS_BASE } from "@/config/devices";
+import { sensorsDeviceTins, getSensorTins, categoryConfig, categoryToLogo, LOGOS_BASE, uint32ToFloat32Categories } from "@/config/devices";
 import { toast } from "sonner";
 import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
 
@@ -175,6 +175,40 @@ export function sanitizeSensorValue(
   return value;
 }
 
+// ─── uint32 → float32 Decoding ─────────────────────────────────────────
+
+/**
+ * Reinterpret a uint32 integer as an IEEE 754 float32.
+ * Some IoT sensors transmit raw float bytes that the API backend exposes as
+ * plain integer values instead of proper floats.
+ */
+export function decodeUint32AsFloat32(rawUint32: number): number {
+  const buf = new ArrayBuffer(4);
+  const dv = new DataView(buf);
+  dv.setUint32(0, rawUint32 >>> 0, false);
+  return dv.getFloat32(0, false);
+}
+
+/**
+ * Conditionally decode a sensor value based on its category.
+ * If the category requires uint32→float32 decoding AND the value is
+ * suspiciously large (i.e. looks like raw bytes rather than a real reading),
+ * perform the conversion.  Otherwise return the value unchanged.
+ */
+export function maybeDecodeSensorValue(value: number, category?: string): number {
+  if (!category || !uint32ToFloat32Categories.has(category)) return value;
+  // Only attempt decode when the value is in the uint32 range of typical
+  // float32 representations (> 100 000 rules out normal ppm readings;
+  // ≤ 0xFFFFFFFF keeps it within uint32 bounds)
+  if (value > 100000 && value <= 0xFFFFFFFF) {
+    const decoded = decodeUint32AsFloat32(value);
+    if (Number.isFinite(decoded) && Math.abs(decoded) < 100000) {
+      return decoded;
+    }
+  }
+  return value;
+}
+
 const parseMetricValue = (
   raw?: string,
   options?: { category?: string; metric?: string }
@@ -308,6 +342,11 @@ export const fetchSensorMetrics = async (
         icons[tin] = entry["Device Icon"];
       }
       const parsed = parseMetricValue(entry.Value, { metric: entry.Metric });
+      // Decode raw sensor value if needed (e.g. uint32→float32 for MICS-5524)
+      const sensorCfg = sensorsDeviceTins.find(c => c.tin === tin);
+      if (parsed.value !== null && sensorCfg?.category) {
+        parsed.value = maybeDecodeSensorValue(parsed.value, sensorCfg.category);
+      }
       const valueIsColor = isColorMetric(entry.Metric, entry.Value);
       if (parsed.value === null && !valueIsColor) return;
       const metricKey = (entry.Metric || "value").trim().toLowerCase() || "value";

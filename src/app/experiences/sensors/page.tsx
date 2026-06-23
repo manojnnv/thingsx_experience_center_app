@@ -17,6 +17,7 @@ import {
   fetchLatestSensorData,
   sanitizeSensorValue,
   isValidSensorReading,
+  maybeDecodeSensorValue,
   type SensorMetric,
 } from "@/app/services/sensors/sensors";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
@@ -271,8 +272,10 @@ function SensorsPageContent() {
         metricEntries.forEach(([key, m]) => {
           const rawVal = toNum((m as { value?: unknown }).value);
           const numVal = Number.isFinite(rawVal) ? rawVal : 0;
-          const value = isValidSensorReading(numVal, { ...sanitizeOpts, metric: key })
-            ? sanitizeSensorValue(numVal, { ...sanitizeOpts, metric: key })
+          // Decode raw sensor value if needed (e.g. uint32→float32 for MICS-5524)
+          const decodedVal = maybeDecodeSensorValue(numVal, category);
+          const value = isValidSensorReading(decodedVal, { ...sanitizeOpts, metric: key })
+            ? sanitizeSensorValue(decodedVal, { ...sanitizeOpts, metric: key })
             : 0;
           fields[key] = { value, timestamp: m.timestamp };
         });
@@ -280,9 +283,11 @@ function SensorsPageContent() {
         const [firstKey, first] = metricEntries[0];
         const firstRaw = toNum((first as { value?: unknown }).value);
         const firstNum = Number.isFinite(firstRaw) ? firstRaw : 0;
-        const primaryValid = isValidSensorReading(firstNum, { ...sanitizeOpts, metric: firstKey });
+        // Decode raw sensor value if needed (e.g. uint32→float32 for MICS-5524)
+        const firstDecoded = maybeDecodeSensorValue(firstNum, category);
+        const primaryValid = isValidSensorReading(firstDecoded, { ...sanitizeOpts, metric: firstKey });
         const primaryValue: number | null = primaryValid
-          ? sanitizeSensorValue(firstNum, { ...sanitizeOpts, metric: firstKey })
+          ? sanitizeSensorValue(firstDecoded, { ...sanitizeOpts, metric: firstKey })
           : null;
         const ts = new Date(first.timestamp.replace(" ", "T"));
 

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { colors } from "@/config/theme";
+import { multiValueSensorFields } from "@/config/devices";
 import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
@@ -32,7 +33,12 @@ const MemoizedSensorNode = React.memo(
     const allFieldsTooltip =
       fieldKeys.length > 0
         ? Object.entries(fields!)
-            .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...displayOpts, metric: k }).toFixed(1) : "—"}`)
+            .map(([k, v]) => {
+              const mvFields = multiValueSensorFields[sensorData.category];
+              const fieldDef = mvFields?.find(f => f.key === k);
+              const label = fieldDef?.label ?? k.replace(/_/g, " ");
+              return `${label}: ${v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...displayOpts, metric: k }).toFixed(1) : "—"}`;
+            })
             .join("\n")
         : displayValue != null ? `${displayValue.toFixed(1)} ${sensorData.unit}` : "—";
 
@@ -64,7 +70,9 @@ const MemoizedSensorNode = React.memo(
             {fieldKeys.map((k, i) => {
               const v = fields![k]?.value;
               const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
-              const label = k.replace(/_/g, " ");
+              const mvFields = multiValueSensorFields[sensorData.category];
+              const fieldDef = mvFields?.find(f => f.key === k);
+              const label = fieldDef?.label ?? k.replace(/_/g, " ");
               const y = sensorPos.y + r + 7.8 + i * 3.4;
               return (
                 <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
@@ -166,7 +174,10 @@ const SensorsDataTable = React.memo(function SensorsDataTable({
                       .slice(1)
                       .map(([k, v]) => {
                         const safeVal = v?.value != null ? sanitizeSensorValue(Number(v.value) || 0, { ...tableOpts, metric: k }) : null;
-                        return `${k.replace(/_/g, " ")}: ${safeVal !== null ? safeVal.toFixed(1) : "—"}`;
+                        const mvFields = multiValueSensorFields[sensor.category];
+                        const fieldDef = mvFields?.find(f => f.key === k);
+                        const label = fieldDef?.label ?? k.replace(/_/g, " ");
+                        return `${label}: ${safeVal !== null ? safeVal.toFixed(1) : "—"}`;
                       })
                       .join(" | ")
                   : null;

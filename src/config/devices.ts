@@ -358,6 +358,31 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   load_cell: { label: "Load Cell", unit: "kg", icon: "scale" },
 };
 
+// ─── MULTI-VALUE SENSOR CONFIGURATION ──────────────────────────────────
+// For sensors whose payload packs multiple readings into one data frame.
+
+export interface MultiValueSensorField {
+  key: string;
+  label: string;
+  unit: string;
+}
+
+/** Maps a sensor category → ordered list of sub-field definitions for display. */
+export const multiValueSensorFields: Record<string, MultiValueSensorField[]> = {
+  air_quality_alcohol: [
+    { key: "ethanol_ppm", label: "Ethanol", unit: "ppm" },
+    { key: "co2_ppm", label: "CO₂", unit: "ppm" },
+    { key: "h2_ppm", label: "H₂", unit: "ppm" },
+  ],
+};
+
+/**
+ * Sensor categories whose raw API values need uint32 → float32 byte
+ * reinterpretation.  Some IoT hardware transmits IEEE 754 float bytes that
+ * the API backend exposes as plain integer values.
+ */
+export const uint32ToFloat32Categories = new Set<string>(["air_quality_alcohol"]);
+
 // Base path for device/sensor logos (public/assets/Logos)
 export const LOGOS_BASE = "/assets/Logos";
 
