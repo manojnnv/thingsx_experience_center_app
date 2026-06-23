@@ -35,6 +35,7 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0002000001", displayName: "Accelerometer", category: "accelerometer" },
   { tin: "SN0001000010", displayName: "Temp (BME680)", category: "temperature" },
   { tin: "SN0006000002", displayName: "MQ6 Gas Sensor", category: "gas_sensor" },
+  { tin: "SN0006000003", displayName: "MICS-5524 Air Quality", category: "air_quality_alcohol" }, // ethanol ppm (4B) + CO₂ ppm (4B) + H₂ ppm (4B) = 12 bytes
   { tin: "SN0011000001", displayName: "Current Clamp Type", category: "current" },
   { tin: "SN0007000007", displayName: "Light Intensity", category: "light" },
   { tin: "SN0023000001", displayName: "DPS310", category: "pressure" },
@@ -348,6 +349,7 @@ export const categoryConfig: Record<string, { label: string; unit: string; icon:
   accelerometer: { label: "Accelerometer", unit: "m/s²", icon: "activity" },
   gas: { label: "Gas", unit: "ppm", icon: "wind" },
   gas_sensor: { label: "LPG / Propane Gas", unit: "PPM", icon: "wind" },
+  air_quality_alcohol: { label: "Air Quality (MICS-5524)", unit: "ppm", icon: "wind" }, // ethanol ppm | CO₂ ppm | H₂ ppm
   current: { label: "Current", unit: "A", icon: "zap" },
   magnetometer: { label: "Magnetometer", unit: "°", icon: "compass" },
   relay: { label: "Relay", unit: "state", icon: "toggle-right" },
@@ -376,6 +378,7 @@ export const categoryToLogo: Record<string, string> = {
   accelerometer: "Acclerometer Sensor.png",
   pressure: "Air Pressure Sensor.svg",
   air_quality: "Air Quality Sensor.png",
+  air_quality_alcohol: "MICS-5524 Carbon Monoxide Hydrogen Methane Alcohol Gas Sensor Detection Module.svg",
   motion: "PIR Sensor.svg",
 };
 
