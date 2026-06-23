@@ -10,6 +10,7 @@ import {
   categoryConfig,
   categoryToLogo,
   LOGOS_BASE,
+  multiValueSensorFields,
 } from "@/config/devices";
 import {
   fetchDevicesByDeviceCodes,
@@ -279,6 +280,20 @@ function SensorsPageContent() {
             : 0;
           fields[key] = { value, timestamp: m.timestamp };
         });
+
+        // For multi-value sensors, rename generic API metric keys (e.g. "value")
+        // to match the configured field definitions (e.g. "ethanol_ppm") by position.
+        const mvFieldDefs = multiValueSensorFields[category];
+        if (mvFieldDefs && Object.keys(fields).length > 0) {
+          const apiKeys = Object.keys(fields);
+          const renamed: Record<string, { value: number; timestamp?: string }> = {};
+          apiKeys.forEach((apiKey, index) => {
+            const newKey = mvFieldDefs[index]?.key ?? apiKey;
+            renamed[newKey] = fields[apiKey];
+          });
+          for (const k of apiKeys) delete fields[k];
+          Object.assign(fields, renamed);
+        }
 
         const [firstKey, first] = metricEntries[0];
         const firstRaw = toNum((first as { value?: unknown }).value);

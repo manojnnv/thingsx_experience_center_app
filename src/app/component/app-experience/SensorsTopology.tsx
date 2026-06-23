@@ -27,6 +27,10 @@ const MemoizedSensorNode = React.memo(
     const fields = sensorData.fields;
     const fieldKeys = fields ? Object.keys(fields) : [];
     const hasMultipleFields = fieldKeys.length > 1;
+    // For multi-value sensor categories (e.g. MICS-5524), always show labeled fields
+    // even when the API only returns 1 metric — so the user knows which value it is.
+    const isMultiValueSensor = !!multiValueSensorFields[sensorData.category];
+    const showFieldLabels = (hasMultipleFields || isMultiValueSensor) && fieldKeys.length > 0;
     const history = sensorData.history || [];
     const lastKnownGood = history.length > 0 ? history[history.length - 1] : null;
     const displayValue = sensorData.value !== null ? sensorData.value : lastKnownGood;
@@ -62,7 +66,7 @@ const MemoizedSensorNode = React.memo(
         ) : (
           <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
         )}
-        {hasMultipleFields && fieldKeys.length > 0 ? (
+        {showFieldLabels ? (
           <>
             <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
               {sensorData.displayName}
@@ -182,6 +186,10 @@ const SensorsDataTable = React.memo(function SensorsDataTable({
                       .join(" | ")
                   : null;
 
+                // Primary label for multi-value sensors (e.g. "Ethanol")
+                const mvFieldDefs = multiValueSensorFields[sensor.category];
+                const primaryLabel = mvFieldDefs?.[0]?.label;
+
                 return (
                   <tr key={sensor.tin} className="transition-colors duration-200 cursor-pointer hover:bg-white/5" style={{ backgroundColor: idx % 2 === 0 ? colors.transparent : `${colors.background}50`, borderBottom: `1px solid ${colors.border}` }} onClick={() => device && onSelectDevice(device)}>
                     <td className="px-3 py-2 w-1/4">
@@ -195,6 +203,7 @@ const SensorsDataTable = React.memo(function SensorsDataTable({
                     <td className="px-3 py-2 w-1/4">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-base font-bold" style={{ color: colors.yellow }}>
+                          {primaryLabel && <span className="text-xs font-normal mr-1" style={{ color: colors.textMuted }}>{primaryLabel}:</span>}
                           {displayCurrent != null ? displayCurrent.toFixed(1) : "—"}<span className="text-xs font-normal ml-1" style={{ color: colors.textMuted }}>{sensor.unit}</span>
                         </span>
                         {secondaryFields && (
