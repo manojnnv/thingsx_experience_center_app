@@ -6,8 +6,9 @@ import { multiValueSensorFields } from "@/config/devices";
 import { sanitizeSensorValue } from "@/app/services/sensors/sensors";
 import type { DisplayDevice, SensorLiveData } from "./types";
 
-// ─── Constants ──────────────────────────────────────────────────────────
-const STALE_THRESHOLD_MS = 300000; // 5m — sensor is "stale" if no fresh data
+// ─── Constants ────────────────────────────────────────────────────────────────────
+// NOTE: Stale-threshold cleanup is now handled by the poller in page.tsx.
+// This component is purely data-driven — if a TIN is in connectedSensors, it's active.
 const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
 
 // ─── Memoized Sensor Node (SVG) ────────────────────────────────────────
@@ -260,18 +261,19 @@ function SensorsTopologyInner({
   centralEndnode: { displayName: string };
   categoryConfig: Record<string, { label?: string }>;
 }) {
-  // Compute active sensors from data — NO timer needed.
-  // This runs only when connectedSensors changes (i.e., new API data).
+  // Compute active sensors from data — NO timer, NO Date.now().
+  // The poller in page.tsx handles stale/miss cleanup, so everything
+  // in connectedSensors is guaranteed active. We only filter out
+  // hidden categories here.
   const isVisibleSensor = React.useCallback((s: SensorLiveData) => {
-    if (Date.now() - s.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) return false;
     const d = getDeviceForSensor(s.tin);
     return !d || !HIDDEN_CATEGORIES.has(d.category);
   }, [getDeviceForSensor]);
 
+  // Simple presence check — if it's in connectedSensors, it's active.
+  // No Date.now() jitter.
   const isSensorActive = React.useCallback((tin: string) => {
-    const sensorData = connectedSensors.get(tin);
-    if (!sensorData) return false;
-    return Date.now() - sensorData.lastReceivedAt.getTime() < STALE_THRESHOLD_MS;
+    return connectedSensors.has(tin);
   }, [connectedSensors]);
 
   // Memoize active sensor list — stable ref unless connectedSensors changes

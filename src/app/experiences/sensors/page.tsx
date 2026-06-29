@@ -35,6 +35,7 @@ import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryBu
 const ACTIVE_POLL_INTERVAL_MS = 2000; // Poll live data every 2 seconds when active
 const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
 const STALE_THRESHOLD_MS = 300000; // Sensor considered inactive if no data in 5 minutes
+const MISS_THRESHOLD = 3; // Remove sensor after 3 consecutive empty polls (~6s)
 
 const TABS = {
   grid: "Component Matrix",
@@ -61,6 +62,8 @@ function SensorsPageContent() {
   const [connectedSensors, setConnectedSensors] = useState<Map<string, SensorLiveData>>(new Map());
   // Snapshot of last committed values — avoids re-renders when API returns the same data
   const lastValuesRef = useRef<Map<string, string>>(new Map());
+  // Consecutive-miss counter per TIN — sensor removed only after MISS_THRESHOLD consecutive empty polls
+  const missCountRef = useRef<Map<string, number>>(new Map());
 
   // Ref to track when we're intentionally closing the sheet (to prevent race condition)
   const isClosingRef = useRef(false);
@@ -71,6 +74,8 @@ function SensorsPageContent() {
   // Stable TINs ref for polling — avoids re-mounting the polling effect when
   // device metadata changes. Updated once after initial device load.
   const pollTinsRef = useRef<string[]>([]);
+  // Stable flag that flips once after initial device load — prevents polling effect restarts
+  const [devicesLoaded, setDevicesLoaded] = useState(false);
 
   // Initialize devices from config
   const loadDevices = React.useCallback(async (isRefresh = false) => {
@@ -176,6 +181,8 @@ function SensorsPageContent() {
       pollTinsRef.current = deviceListWithReadings
         .filter((d) => d.category !== "load_cell" && d.category !== "addressable_rgb")
         .map((d) => d.tin);
+      // Signal that devices are loaded — starts the polling effect exactly once
+      setDevicesLoaded(true);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -224,7 +231,7 @@ function SensorsPageContent() {
 
   // ─── Live Topology Polling ───────────────────────────────────────────
   useEffect(() => {
-    if (activeTab !== TABS.topology || pollTinsRef.current.length === 0) return;
+    if (activeTab !== TABS.topology || !devicesLoaded || pollTinsRef.current.length === 0) return;
 
     let cancelled = false;
     let timeoutId: NodeJS.Timeout;
@@ -242,9 +249,12 @@ function SensorsPageContent() {
       const payload = result.data;
       const now = Date.now();
 
-      // Build a fingerprint string per TIN so we can detect actual changes
+      // Build a VALUE-ONLY fingerprint per TIN — timestamp changes alone
+      // do NOT trigger re-renders (key anti-flicker measure).
       let hasChanges = false;
       const nextFingerprints = new Map<string, string>();
+      // Track which TINs the API returned data for this cycle
+      const presentTins = new Set<string>();
 
       const newEntries: Array<{
         tin: string;
@@ -266,6 +276,10 @@ function SensorsPageContent() {
 
         const metricEntries = Object.entries(metrics);
         if (metricEntries.length === 0) return;
+
+        // Mark this TIN as present — reset its miss counter
+        presentTins.add(tin);
+        missCountRef.current.delete(tin);
 
         const sanitizeOpts = { category, metric: "" };
         const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v));
@@ -306,12 +320,13 @@ function SensorsPageContent() {
           : null;
         const ts = new Date(first.timestamp.replace(" ", "T"));
 
-        // Fingerprint
+        // VALUE-ONLY fingerprint — excludes timestamp so identical readings
+        // across polls don't trigger re-renders
         const fpParts = Object.entries(fields)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([, f]) => `${f.value.toFixed(4)}|${first.timestamp}`);
+          .map(([k, f]) => `${k}:${f.value.toFixed(4)}`);
         const primaryFp = primaryValue !== null ? primaryValue.toFixed(4) : "invalid";
-        const fp = `${primaryFp}|${first.timestamp};${fpParts.join(";")}`;
+        const fp = `${primaryFp};${fpParts.join(";")}`;
         nextFingerprints.set(tin, fp);
 
         if (lastValuesRef.current.get(tin) !== fp) {
@@ -340,14 +355,34 @@ function SensorsPageContent() {
         });
       });
 
-      // Detect removals
+      // ── Consecutive-miss logic ──────────────────────────────────────
+      // For TINs that were previously tracked but NOT in this API response,
+      // increment their miss counter. Only remove after MISS_THRESHOLD
+      // consecutive misses (~6s). This prevents single-poll hiccups from
+      // causing sensors to flash in/out.
+      const tinsToRemove = new Set<string>();
       lastValuesRef.current.forEach((_, tin) => {
-        if (!nextFingerprints.has(tin)) hasChanges = true;
+        if (!presentTins.has(tin)) {
+          const currentMisses = (missCountRef.current.get(tin) || 0) + 1;
+          missCountRef.current.set(tin, currentMisses);
+          if (currentMisses >= MISS_THRESHOLD) {
+            tinsToRemove.add(tin);
+            missCountRef.current.delete(tin);
+            hasChanges = true;
+          }
+        }
       });
 
-      if (!hasChanges) return;
+      if (!hasChanges && tinsToRemove.size === 0) return;
 
-      // Commit fingerprints
+      // Commit fingerprints (remove entries for TINs being removed)
+      tinsToRemove.forEach((tin) => nextFingerprints.delete(tin));
+      // Preserve fingerprints for TINs that are still tracked but missed this cycle
+      lastValuesRef.current.forEach((fp, tin) => {
+        if (!nextFingerprints.has(tin) && !tinsToRemove.has(tin)) {
+          nextFingerprints.set(tin, fp);
+        }
+      });
       lastValuesRef.current = nextFingerprints;
 
       // Surgical merge: only create new SensorLiveData objects for TINs whose
@@ -355,6 +390,21 @@ function SensorsPageContent() {
       setConnectedSensors((prev) => {
         let mapChanged = false;
         const updated = new Map(prev);
+
+        // Stale-threshold cleanup: if a sensor hasn't been seen by the API
+        // AND its last received timestamp is older than STALE_THRESHOLD_MS,
+        // add it to the removal set. This replaces the Date.now() check
+        // that was previously in the topology renderer.
+        prev.forEach((sensorData, tin) => {
+          if (!presentTins.has(tin) && !tinsToRemove.has(tin)) {
+            if (now - sensorData.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) {
+              tinsToRemove.add(tin);
+              missCountRef.current.delete(tin);
+              // Also clean up fingerprint
+              nextFingerprints.delete(tin);
+            }
+          }
+        });
 
         newEntries.forEach((entry) => {
           const existing = prev.get(entry.tin);
@@ -390,9 +440,9 @@ function SensorsPageContent() {
           });
         });
 
-        // Remove TINs no longer present
-        prev.forEach((_, tin) => {
-          if (!nextFingerprints.has(tin)) {
+        // Remove TINs that exceeded MISS_THRESHOLD or STALE_THRESHOLD
+        tinsToRemove.forEach((tin) => {
+          if (updated.has(tin)) {
             updated.delete(tin);
             mapChanged = true;
           }
@@ -429,7 +479,7 @@ function SensorsPageContent() {
       if (abortController) abortController.abort();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeTab, devices.length]);
+  }, [activeTab, devicesLoaded]);
 
   // O(1) lookup map — stable reference as long as `devices` doesn't change
   const devicesByTin = React.useMemo(
