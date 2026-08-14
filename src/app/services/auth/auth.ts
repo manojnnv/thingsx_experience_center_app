@@ -14,16 +14,19 @@ import { api, setAccessToken, setRefreshToken, clearTokens } from "@/app/utils/a
 // ===========================================
 
 interface LoginResponseData {
-  access_token: string;
-  refresh_token: string;
-  email: string;
-  full_name: string;
-  org_id: number | null;
-  org_name: string | null;
-  user_address: string | null;
   user_id: number;
+  email: string;
+  org_id: number | null;
+  full_name: string;
   telephone: string | null;
   site_ids: number[];
+  site_name?: string | null;
+  org_name: string | null;
+  user_address: string | null;
+  login_site_id?: number | null;
+  login_status?: string | null;
+  access_token: string;
+  refresh_token?: string | null;
   session_id: string;
   message?: string;
 }
@@ -78,7 +81,7 @@ async function login(): Promise<boolean> {
       console.log("🔐 Attempting auto-login for Experience Center...");
       
       const res = await api.post<ApiResponse<LoginResponseData>>(
-        "v1/user/login",
+        "v1/user/login/v2",
         SERVICE_CREDENTIALS
       );
 
@@ -93,7 +96,9 @@ async function login(): Promise<boolean> {
 
       // Store tokens
       setAccessToken(resData.access_token);
-      setRefreshToken(resData.refresh_token);
+      if (resData.refresh_token) {
+        setRefreshToken(resData.refresh_token);
+      }
 
       // Store user data in localStorage
       const storeIfExists = (key: string, value: unknown) => {
@@ -107,15 +112,24 @@ async function login(): Promise<boolean> {
       storeIfExists("org_id", resData.org_id);
       storeIfExists("org_name", resData.org_name);
       storeIfExists("user_address", resData.user_address);
-      storeIfExists("refresh_token", resData.refresh_token);
+      if (resData.refresh_token) {
+        storeIfExists("refresh_token", resData.refresh_token);
+      }
       storeIfExists("access_token", resData.access_token);
       storeIfExists("user_id", resData.user_id);
       storeIfExists("telephone", resData.telephone);
-      storeIfExists("site_id", resData.site_ids?.[0]);
+      storeIfExists("site_name", resData.site_name);
+      storeIfExists("login_site_id", resData.login_site_id);
+      storeIfExists("login_status", resData.login_status);
       storeIfExists("session_id", resData.session_id);
 
+      const resolvedSiteId =
+        resData.login_site_id ??
+        (resData.site_ids && resData.site_ids.length > 0 ? resData.site_ids[0] : 1);
+      storeIfExists("site_id", resolvedSiteId);
+
       console.log("✅ Auto-login successful for Experience Center");
-      console.log("📍 Site ID:", resData.site_ids?.[0]);
+      console.log("📍 Site ID:", resolvedSiteId);
       
       isAuthenticated = true;
       return true;
@@ -161,7 +175,8 @@ async function logout(): Promise<void> {
     const keysToRemove = [
       "email", "full_name", "org_id", "org_name", "user_address",
       "refresh_token", "access_token", "user_id", "telephone",
-      "site_id", "session_id", "setup_completed",
+      "site_id", "login_site_id", "site_name", "login_status",
+      "session_id", "setup_completed",
     ];
 
     keysToRemove.forEach(key => localStorage.removeItem(key));

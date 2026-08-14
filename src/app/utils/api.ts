@@ -13,7 +13,7 @@ import axios, {
 } from "axios";
 
 // API Base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://tgx-app-api.dev.intellobots.com";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://tgx-app-api.sit.intellobots.com";
 
 // Serialize Axios error for debugging
 function serializeAxiosError(error: unknown) {
@@ -113,7 +113,6 @@ api.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      refreshToken &&
       typeof window !== "undefined" &&
       !originalRequest.url?.includes("/login")
     ) {
@@ -138,14 +137,21 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        const refreshPayload = refreshToken ? { refresh: refreshToken } : {};
         const refreshResponse = await axios.post(
           `${API_BASE_URL}/v1/user/token-refresh`,
-          { refresh: refreshToken },
+          refreshPayload,
           { withCredentials: true }
         );
 
-        const newAccessToken = refreshResponse.data?.access;
-        const newRefreshToken = refreshResponse.data?.refresh;
+        const newAccessToken =
+          refreshResponse.data?.access ||
+          refreshResponse.data?.data?.access_token ||
+          refreshResponse.data?.access_token;
+        const newRefreshToken =
+          refreshResponse.data?.refresh ||
+          refreshResponse.data?.data?.refresh_token ||
+          refreshResponse.data?.refresh_token;
 
         if (!newAccessToken) {
           localStorage.setItem("reasonLogout", "access token expired");

@@ -11,6 +11,7 @@ import { getAllAssetData, Asset } from "@/app/services/assets/asset";
 import { useSelector } from "react-redux";
 import AppButton from "@/app/component/app-button/AppButton";
 import { colors } from "@/config/theme";
+import { API_BASE_URL } from "@/app/utils/api";
 
 interface WarehouseIndoorPositioningTabProps {
   accentColor?: string;
@@ -23,6 +24,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
   const canvasRef = useRef<HTMLDivElement>(null);
   const [allAsset, setAllAsset] = useState<Asset[]>([]);
   const siteID = useSelector((state: any) => state.orgDetails.siteId);
+  const [selectAsset, setSelectedAsset] = useState<string>("");
 
   // Physical floor dimensions in centimeters
   const PHYS_FLOOR_WIDTH_CM = 523;
@@ -30,7 +32,6 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
 
   const [zoom, setZoom] = useState(1);
   const [liveTracking, setLiveTracking] = useState(false);
-  const [selectAsset, setSelectedAsset] = useState<string>();
 
   // refs for SSE and marker
   const liveSourceRef = useRef<{ close: () => void } | null>(null);
@@ -46,8 +47,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     }
   };
 
-  const SSE_URL_BASE =
-    "https://tgx-app-api.dev.intellobots.com/v1/asset/live-tracking";
+  const SSE_URL_BASE = `${API_BASE_URL}/v1/asset/live-tracking`;
 
   const parseSSEData = (data: any) => {
     try {
