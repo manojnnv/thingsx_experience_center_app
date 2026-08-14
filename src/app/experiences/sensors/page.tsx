@@ -32,10 +32,10 @@ import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experien
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
 
 // Constants
-const ACTIVE_POLL_INTERVAL_MS = 2000; // Poll live data every 2 seconds when active
+const ACTIVE_POLL_INTERVAL_MS = 3000; // Poll live data every 3 seconds when active
 const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
 const STALE_THRESHOLD_MS = 300000; // Sensor considered inactive if no data in 5 minutes
-const MISS_THRESHOLD = 3; // Remove sensor after 3 consecutive empty polls (~6s)
+const MISS_THRESHOLD = 3; // Remove sensor after 3 consecutive empty polls (~9s)
 
 const TABS = {
   grid: "Component Matrix",
@@ -229,9 +229,9 @@ function SensorsPageContent() {
     setDeviceParam(null);
   };
 
-  // ─── Live Topology Polling ───────────────────────────────────────────
+  // ─── Live Data Polling (3-second interval) ─────────────────────────
   useEffect(() => {
-    if (activeTab !== TABS.topology || !devicesLoaded || pollTinsRef.current.length === 0) return;
+    if (!devicesLoaded || pollTinsRef.current.length === 0) return;
 
     let cancelled = false;
     let timeoutId: NodeJS.Timeout;
@@ -358,7 +358,7 @@ function SensorsPageContent() {
       // ── Consecutive-miss logic ──────────────────────────────────────
       // For TINs that were previously tracked but NOT in this API response,
       // increment their miss counter. Only remove after MISS_THRESHOLD
-      // consecutive misses (~6s). This prevents single-poll hiccups from
+      // consecutive misses (~9s). This prevents single-poll hiccups from
       // causing sensors to flash in/out.
       const tinsToRemove = new Set<string>();
       lastValuesRef.current.forEach((_, tin) => {
@@ -386,15 +386,14 @@ function SensorsPageContent() {
       lastValuesRef.current = nextFingerprints;
 
       // Surgical merge: only create new SensorLiveData objects for TINs whose
-      // fingerprint actually changed.
+      // fingerprint actually changed, preserving old values when incoming is absent.
       setConnectedSensors((prev) => {
         let mapChanged = false;
         const updated = new Map(prev);
 
         // Stale-threshold cleanup: if a sensor hasn't been seen by the API
         // AND its last received timestamp is older than STALE_THRESHOLD_MS,
-        // add it to the removal set. This replaces the Date.now() check
-        // that was previously in the topology renderer.
+        // add it to the removal set.
         prev.forEach((sensorData, tin) => {
           if (!presentTins.has(tin) && !tinsToRemove.has(tin)) {
             if (now - sensorData.lastReceivedAt.getTime() >= STALE_THRESHOLD_MS) {
@@ -410,18 +409,24 @@ function SensorsPageContent() {
           const existing = prev.get(entry.tin);
           const history = existing?.history || [];
           const isActive = now - entry.timestamp.getTime() < STALE_THRESHOLD_MS;
+          const entryValue = entry.value !== null ? entry.value : (existing?.value ?? null);
           const newHistory =
-            isActive && entry.value !== null
-              ? [...history, entry.value].slice(-30)
+            isActive && entryValue !== null
+              ? [...history, entryValue].slice(-30)
               : history;
+          const mergedFields = entry.fields
+            ? { ...(existing?.fields || {}), ...entry.fields }
+            : existing?.fields;
+          const mergedValueDisplay = entry.valueDisplay ?? existing?.valueDisplay;
 
           // Preserve identity if data hasn't changed
           if (
             existing &&
-            existing.value === entry.value &&
+            existing.value === entryValue &&
             existing.lastReceivedAt.getTime() === entry.timestamp.getTime() &&
             existing.history.length === newHistory.length &&
-            existing.unit === entry.unit
+            existing.unit === entry.unit &&
+            existing.valueDisplay === mergedValueDisplay
           ) {
             return;
           }
@@ -429,14 +434,14 @@ function SensorsPageContent() {
           mapChanged = true;
           updated.set(entry.tin, {
             tin: entry.tin,
-            value: entry.value,
+            value: entryValue,
             unit: entry.unit,
             displayName: entry.displayName,
             category: entry.category,
             lastReceivedAt: entry.timestamp,
             history: newHistory,
-            fields: entry.fields,
-            valueDisplay: entry.valueDisplay,
+            fields: mergedFields,
+            valueDisplay: mergedValueDisplay,
           });
         });
 
@@ -479,7 +484,7 @@ function SensorsPageContent() {
       if (abortController) abortController.abort();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeTab, devicesLoaded]);
+  }, [devicesLoaded]);
 
   // O(1) lookup map — stable reference as long as `devices` doesn't change
   const devicesByTin = React.useMemo(

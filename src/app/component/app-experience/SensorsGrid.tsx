@@ -45,7 +45,7 @@ function SensorsGrid({
           const displayOpts = { category: device.category };
           const lkg = liveData?.history?.length ? liveData.history[liveData.history.length - 1] : null;
           const rawDisplayValue = liveData
-            ? (liveData.value ?? lkg)
+            ? (liveData.value ?? lkg ?? device.lastReading)
             : device.lastReading;
           const displayValue =
             rawDisplayValue !== null && rawDisplayValue !== undefined
@@ -62,7 +62,7 @@ function SensorsGrid({
           const allFieldsList =
             fieldKeys.length > 0
               ? fieldKeys.map((k) => {
-                  const v = fields![k]?.value;
+                  const v = fields![k]?.value ?? device.fields?.[k]?.value;
                   const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
                   const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
                   return { label, value: safe != null ? safe.toFixed(1) : "—" };

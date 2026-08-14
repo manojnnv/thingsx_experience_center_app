@@ -232,14 +232,16 @@ export const fetchDevicesByDeviceCode = async (
   deviceCode: string
 ): Promise<ServiceResult<DeviceByCode[]>> => {
   try {
+    const siteId = typeof window !== "undefined" ? localStorage.getItem("site_id") : null;
+    if (!siteId) return ok([]);
     const resp = await api.post("/v1/site/devices-by-device-code", {
-      site_id: localStorage.getItem("site_id"),
+      site_id: siteId,
       device_code: deviceCode,
     });
     return ok(resp?.data?.data || []);
   } catch (error) {
-    console.error("Error fetching devices by device code:", error);
-    return fail(getErrorMessage(error, "Failed to fetch devices by device code"));
+    console.warn(`Error fetching devices for device code ${deviceCode}:`, error);
+    return ok([]);
   }
 };
 
@@ -247,14 +249,26 @@ export const fetchDevicesByDeviceCodes = async (
   deviceCodes: string[]
 ): Promise<ServiceResult<DeviceByCode[]>> => {
   const uniqueCodes = Array.from(new Set(deviceCodes.filter(Boolean)));
-  const results = await Promise.all(
-    uniqueCodes.map((code) => fetchDevicesByDeviceCode(code))
-  );
-  const errors = results.filter((result) => result.error);
-  if (errors.length > 0) {
-    return fail("Failed to fetch devices by device codes");
+  const allDevices: DeviceByCode[] = [];
+
+  // Fetch in chunks of 3 with a short delay between batches to avoid 429 rate limits
+  const CHUNK_SIZE = 3;
+  for (let i = 0; i < uniqueCodes.length; i += CHUNK_SIZE) {
+    const chunk = uniqueCodes.slice(i, i + CHUNK_SIZE);
+    const results = await Promise.allSettled(
+      chunk.map((code) => fetchDevicesByDeviceCode(code))
+    );
+    results.forEach((res) => {
+      if (res.status === "fulfilled" && res.value?.data) {
+        allDevices.push(...res.value.data);
+      }
+    });
+    if (i + CHUNK_SIZE < uniqueCodes.length) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
   }
-  return ok(results.flatMap((result) => result.data || []));
+
+  return ok(allDevices);
 };
 
 export const fetchDeviceMetrics = async (

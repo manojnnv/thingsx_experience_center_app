@@ -53,6 +53,54 @@ function SensorsSelectedDevicePanel({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [deviceDetails, setDeviceDetails] = useState<Record<string, any> | null>(null);
 
+  const liveSensorData = connectedSensors.get(selectedDevice.tin);
+  const latestDataItems = useMemo(() => {
+    // 1. Check live polled data (from 3s polling)
+    if (liveSensorData?.fields && Object.keys(liveSensorData.fields).length > 0) {
+      return Object.entries(liveSensorData.fields).map(([key, item]) => ({
+        key: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        value: item.value,
+        timestamp: item.timestamp || liveSensorData.lastReceivedAt?.toISOString(),
+      }));
+    }
+    if (liveSensorData?.value !== null && liveSensorData?.value !== undefined) {
+      return [
+        {
+          key: selectedDevice.type || "Reading",
+          value: `${liveSensorData.value} ${liveSensorData.unit || selectedDevice.unit || ""}`.trim(),
+          timestamp: liveSensorData.lastReceivedAt?.toISOString(),
+        },
+      ];
+    }
+    // 2. Check device details API response (old value)
+    if (deviceDetails?.latest_data && Object.keys(deviceDetails.latest_data).length > 0) {
+      return Object.entries(deviceDetails.latest_data).map(([key, val]: any) => ({
+        key,
+        value: val?.value ?? "N/A",
+        timestamp: val?.timestamp,
+      }));
+    }
+    // 3. Check initial device fields (old value)
+    if (selectedDevice?.fields && Object.keys(selectedDevice.fields).length > 0) {
+      return Object.entries(selectedDevice.fields).map(([key, item]) => ({
+        key: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        value: item.value,
+        timestamp: item.timestamp || (selectedDevice.lastReceivedAt ? selectedDevice.lastReceivedAt.toISOString() : undefined),
+      }));
+    }
+    // 4. Check initial last reading (old value)
+    if (selectedDevice?.lastReading !== null && selectedDevice?.lastReading !== undefined) {
+      return [
+        {
+          key: selectedDevice.type || "Reading",
+          value: `${selectedDevice.lastReading} ${selectedDevice.unit || ""}`.trim(),
+          timestamp: selectedDevice.lastReceivedAt ? selectedDevice.lastReceivedAt.toISOString() : undefined,
+        },
+      ];
+    }
+    return [];
+  }, [liveSensorData, deviceDetails?.latest_data, selectedDevice]);
+
   useEffect(() => {
     let mounted = true;
     const loadDetails = async () => {
@@ -264,46 +312,41 @@ function SensorsSelectedDevicePanel({
         <div className="font-semibold mb-3" style={{ color: colors.text }}>
           Latest Data
         </div>
-        {detailsLoading && (
+        {latestDataItems.length > 0 ? (
+          <div className="grid grid-cols-2 gap-4">
+            {latestDataItems.map(({ key, value, timestamp }) => (
+              <div
+                key={key}
+                className="p-3 rounded-lg"
+                style={{
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                <div className="text-sm font-semibold" style={{ color: colors.text }}>
+                  {key} Value
+                </div>
+                <div className="text-sm" style={{ color: colors.textMuted }}>
+                  {value ?? "N/A"}
+                </div>
+                <div className="text-sm font-semibold mt-2" style={{ color: colors.text }}>
+                  {key} Time
+                </div>
+                <div className="text-sm" style={{ color: colors.textMuted }}>
+                  {timestamp ? formatDateTime(timestamp) : "N/A"}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : detailsLoading ? (
           <p className="text-sm" style={{ color: colors.textMuted }}>
             Loading latest data...
           </p>
-        )}
-        {!detailsLoading && detailsError && (
+        ) : detailsError ? (
           <p className="text-sm" style={{ color: colors.textMuted }}>
             {detailsError}
           </p>
-        )}
-        {!detailsLoading && deviceDetails?.latest_data && (
-          <div className="grid grid-cols-2 gap-4">
-            {Object.entries(deviceDetails.latest_data).map(
-              ([key, value]: any) => (
-                <div
-                  key={key}
-                  className="p-3 rounded-lg"
-                  style={{
-                    backgroundColor: colors.background,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                >
-                  <div className="text-sm font-semibold" style={{ color: colors.text }}>
-                    {key} Value
-                  </div>
-                  <div className="text-sm" style={{ color: colors.textMuted }}>
-                    {value?.value ?? "N/A"}
-                  </div>
-                  <div className="text-sm font-semibold mt-2" style={{ color: colors.text }}>
-                    {key} Time
-                  </div>
-                  <div className="text-sm" style={{ color: colors.textMuted }}>
-                    {value?.timestamp ? formatDateTime(value.timestamp) : "N/A"}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
-        {!detailsLoading && !deviceDetails?.latest_data && (
+        ) : (
           <p className="text-sm" style={{ color: colors.textMuted }}>
             No latest data available.
           </p>

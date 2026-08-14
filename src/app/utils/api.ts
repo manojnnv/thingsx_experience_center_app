@@ -103,12 +103,26 @@ type QueueItem = {
 let failedQueue: QueueItem[] = [];
 let isRefreshing = false;
 
-// Response interceptor to handle 401 and refresh token
+// Response interceptor to handle 401 (refresh token) and 429 (rate limiting retry)
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean; _retry429Count?: number };
     const refreshToken = typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null;
+
+    // Handle 429 Too Many Requests with exponential backoff
+    if (error.response?.status === 429 && originalRequest) {
+      originalRequest._retry429Count = originalRequest._retry429Count || 0;
+      if (originalRequest._retry429Count < 3) {
+        originalRequest._retry429Count += 1;
+        const retryAfter = error.response.headers?.["retry-after"];
+        const delayMs = retryAfter
+          ? (Number(retryAfter) || 1) * 1000
+          : 400 * Math.pow(2, originalRequest._retry429Count);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return api(originalRequest);
+      }
+    }
 
     if (
       error.response?.status === 401 &&
