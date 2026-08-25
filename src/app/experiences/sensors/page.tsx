@@ -6,6 +6,7 @@ import { useSetQueryParam } from "@/hooks/useSetQueryParam";
 import { colors } from "@/config/theme";
 import {
   sensorsDeviceTins,
+  sensorConfigByTin,
   centralEndnode,
   categoryConfig,
   categoryToLogo,
@@ -30,6 +31,7 @@ import SensorsSelectedDevicePanel from "@/app/component/app-experience/SensorsSe
 import AppSheet from "@/app/component/app-sheet/AppSheet";
 import type { DisplayDevice, SensorLiveData } from "@/app/component/app-experience/types";
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
+import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary";
 
 // Constants
 const ACTIVE_POLL_INTERVAL_MS = 3000; // Poll live data every 3 seconds when active
@@ -88,7 +90,15 @@ function SensorsPageContent() {
       const deviceCodes = Array.from(
         new Set(sensorsDeviceTins.map((config) => config.tin.slice(0, 6)))
       );
-      const apiDevicesResult = await fetchDevicesByDeviceCodes(deviceCodes);
+      const tins = sensorsDeviceTins.map((c) => c.tin);
+      const end = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      const [apiDevicesResult, metricsResult] = await Promise.all([
+        fetchDevicesByDeviceCodes(deviceCodes),
+        fetchSensorMetrics(tins, start.toISOString(), end.toISOString()),
+      ]);
       if (apiDevicesResult.error) {
         console.warn("Failed to load device metadata:", apiDevicesResult.error);
       }
@@ -123,16 +133,8 @@ function SensorsPageContent() {
           icon: iconPath ?? apiDevice?.device_icon,
         };
       });
-      const end = new Date();
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
       let metricsByTin: Record<string, { timestamp: string; value: number; unit?: string }[]> = {};
       let iconsByTin: Record<string, string> = {};
-      const metricsResult = await fetchSensorMetrics(
-        deviceList.map((device) => device.tin),
-        start.toISOString(),
-        end.toISOString()
-      );
       if (metricsResult.error) {
         console.warn("Failed to load sensor metrics:", metricsResult.error);
       } else {
@@ -243,7 +245,7 @@ function SensorsPageContent() {
       abortController = new AbortController();
 
       const tins = pollTinsRef.current;
-      const result = await fetchLatestSensorData(tins);
+      const result = await fetchLatestSensorData(tins, abortController.signal);
       if (cancelled || result.error || !result.data) return;
 
       const payload = result.data;
@@ -268,7 +270,7 @@ function SensorsPageContent() {
       }> = [];
 
       Object.entries(payload).forEach(([tin, metrics]) => {
-        const config = sensorsDeviceTins.find((c) => c.tin === tin);
+        const config = sensorConfigByTin.get(tin);
         if (!config) return;
 
         const category = config.category || "sensor";
@@ -603,8 +605,10 @@ function SensorsPageFallback() {
 
 export default function SensorsPage() {
   return (
-    <Suspense fallback={<SensorsPageFallback />}>
-      <SensorsPageContent />
-    </Suspense>
+    <ExperienceErrorBoundary>
+      <Suspense fallback={<SensorsPageFallback />}>
+        <SensorsPageContent />
+      </Suspense>
+    </ExperienceErrorBoundary>
   );
 }

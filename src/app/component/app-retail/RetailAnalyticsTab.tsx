@@ -58,10 +58,12 @@ function HeatmapView({
   mode,
   accent,
   onViewStream,
+  visible = true,
 }: {
   mode: "zone" | "product";
   accent: string;
   onViewStream?: (cameraName: string) => void;
+  visible?: boolean;
 }) {
   const isProduct = mode === "product";
   const [loading, setLoading] = useState(false);
@@ -82,6 +84,10 @@ function HeatmapView({
   const allDwellingDataRef = useRef<any[]>([]);
   const segmentWindowsRef = useRef<{ start: string; end: string }[]>([]);
   const layoutLoadedRef = useRef(false);
+  const applyHeatmapRef = useRef<(data?: any[], opts?: { colors?: string[]; alpha?: number }) => void>(() => {});
+  const fitCanvasRef = useRef<() => void>(() => {});
+  const abortRef = useRef<AbortController | null>(null);
+  const rangeRef = useRef<{ start: string; end: string } | null>(null);
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
     min: 0,
     max: 0,
@@ -339,6 +345,7 @@ function HeatmapView({
       canvas.requestRenderAll();
     }).catch((err) => console.error("Failed to create heatmap overlay:", err));
   }, [editor]);
+  applyHeatmapRef.current = applyHeatmap;
 
   const setDottedGridBackground = () => {
     if (!editor) return;
@@ -429,6 +436,7 @@ function HeatmapView({
     setZoom(newZoom);
     canvas.requestRenderAll();
   };
+  fitCanvasRef.current = fitCanvasToContent;
 
   useEffect(() => {
     setDottedGridBackground();
@@ -485,14 +493,14 @@ function HeatmapView({
         editor.canvas.requestRenderAll();
         layoutLoadedRef.current = true;
         setTimeout(() => {
-          try { applyHeatmap(heatMapDataRef.current); } catch { }
-          try { fitCanvasToContent(); } catch { }
+          try { applyHeatmapRef.current(heatMapDataRef.current); } catch { }
+          try { fitCanvasRef.current(); } catch { }
         }, 50);
       });
     } catch (e) {
       console.error("Failed to load layout into canvas:", e);
     }
-  }, [editor, layout, applyHeatmap]);
+  }, [editor?.canvas, layout]);
 
   useEffect(() => {
     heatMapDataRef.current = heatMapData;
@@ -724,6 +732,12 @@ function HeatmapView({
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const fetchTimelineData = async (startDateISO: string, endDateISO: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+    rangeRef.current = { start: startDateISO, end: endDateISO };
+
     try {
       setLoading(true);
       setActiveSegment(null);
@@ -766,23 +780,45 @@ function HeatmapView({
       setSegmentIntensities(new Array(windows.length).fill(0));
 
       const siteID = getSiteId();
-      
-      const zoneRespPromise = zoneCountHeatMap({ siteId: siteID, startDate: startDateISO, endDate: endDateISO });
-      const productRespPromise = isProduct ? productInteraction({ siteId: siteID, startDate: startDateISO, endDate: endDateISO }) : Promise.resolve({ data: [] });
-      const dwellRespPromise = !isProduct ? retrieveDwellingTime({ siteId: siteID, startDate: startDateISO, endDate: endDateISO }) : Promise.resolve({ data: [] });
 
-      const [zoneResp, productResp, dwellResp] = await Promise.all([zoneRespPromise, productRespPromise, dwellRespPromise]);
-
-      const zoneData = zoneResp.data || [];
-      const primaryData = isProduct ? (productResp?.data || []) : zoneData;
-      
-      allZoneDataRef.current = zoneData;
-      allDwellingDataRef.current = dwellResp?.data || [];
-      allAggregatedDataRef.current = primaryData;
-      heatMapDataRef.current = primaryData;
-      setHeatMapData(primaryData);
+      if (isProduct) {
+        const productResp = await productInteraction({
+          siteId: siteID,
+          startDate: startDateISO,
+          endDate: endDateISO,
+          signal,
+        });
+        if (signal.aborted) return;
+        const primaryData = productResp.data || [];
+        allAggregatedDataRef.current = primaryData;
+        heatMapDataRef.current = primaryData;
+        setHeatMapData(primaryData);
+        setLoading(false);
+        zoneCountHeatMap({ siteId: siteID, startDate: startDateISO, endDate: endDateISO, signal }).then((zoneResp) => {
+          if (signal.aborted) return;
+          allZoneDataRef.current = zoneResp.data || [];
+        });
+      } else {
+        const zoneResp = await zoneCountHeatMap({
+          siteId: siteID,
+          startDate: startDateISO,
+          endDate: endDateISO,
+          signal,
+        });
+        if (signal.aborted) return;
+        const zoneData = zoneResp.data || [];
+        allZoneDataRef.current = zoneData;
+        allAggregatedDataRef.current = zoneData;
+        heatMapDataRef.current = zoneData;
+        setHeatMapData(zoneData);
+        setLoading(false);
+        retrieveDwellingTime({ siteId: siteID, startDate: startDateISO, endDate: endDateISO, signal }).then((dwellResp) => {
+          if (signal.aborted) return;
+          allDwellingDataRef.current = dwellResp.data || [];
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   };
 
@@ -805,19 +841,60 @@ function HeatmapView({
     const window = segmentWindowsRef.current[index];
     if (!window) return;
 
-    const zoneRespPromise = zoneCountHeatMap({ siteId: getSiteId(), startDate: window.start, endDate: window.end });
-    const productRespPromise = isProduct ? productInteraction({ siteId: getSiteId(), startDate: window.start, endDate: window.end }) : Promise.resolve({ data: [], error: undefined });
-    const dwellRespPromise = !isProduct ? retrieveDwellingTime({ siteId: getSiteId(), startDate: window.start, endDate: window.end }) : Promise.resolve({ data: [], error: undefined });
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+    const siteID = getSiteId();
 
-    const [zoneResp, productResp, dwellResp] = await Promise.all([zoneRespPromise, productRespPromise, dwellRespPromise]);
+    if (isProduct) {
+      const productResp = await productInteraction({
+        siteId: siteID,
+        startDate: window.start,
+        endDate: window.end,
+        signal,
+      });
+      if (signal.aborted) return;
+      const primaryData = (!productResp.error && productResp.data) ? productResp.data : [];
+      setSegmentDataMap((prev) => {
+        const next = new Map(prev);
+        next.set(index, primaryData);
+        return next;
+      });
+      const total = primaryData.reduce((sum: number, item: any) => {
+        const v = getCountValue(item);
+        return sum + (v ?? 0);
+      }, 0);
+      setSegmentIntensities((prev) => {
+        const next = [...prev];
+        next[index] = total;
+        return next;
+      });
+      heatMapDataRef.current = primaryData;
+      setHeatMapData(primaryData);
+      zoneCountHeatMap({ siteId: siteID, startDate: window.start, endDate: window.end, signal }).then((zoneResp) => {
+        if (signal.aborted) return;
+        const zoneData = (!zoneResp.error && zoneResp.data) ? zoneResp.data : [];
+        setSegmentZoneDataMap((prev) => {
+          const next = new Map(prev);
+          next.set(index, zoneData);
+          return next;
+        });
+      });
+      return;
+    }
 
+    const zoneResp = await zoneCountHeatMap({
+      siteId: siteID,
+      startDate: window.start,
+      endDate: window.end,
+      signal,
+    });
+    if (signal.aborted) return;
     const zoneData = (!zoneResp.error && zoneResp.data) ? zoneResp.data : [];
-    const primaryData = isProduct ? ((!(productResp as any)?.error && productResp?.data) ? productResp.data : []) : zoneData;
-    const dwellData = (!(dwellResp as any)?.error && dwellResp?.data) ? dwellResp.data : [];
-
     setSegmentDataMap((prev) => {
       const next = new Map(prev);
-      next.set(index, primaryData);
+      next.set(index, zoneData);
       return next;
     });
     setSegmentZoneDataMap((prev) => {
@@ -825,13 +902,7 @@ function HeatmapView({
       next.set(index, zoneData);
       return next;
     });
-    setSegmentDwellingDataMap((prev) => {
-      const next = new Map(prev);
-      next.set(index, dwellData);
-      return next;
-    });
-
-    const total = primaryData.reduce((sum: number, item: any) => {
+    const total = zoneData.reduce((sum: number, item: any) => {
       const v = getCountValue(item);
       return sum + (v ?? 0);
     }, 0);
@@ -840,9 +911,17 @@ function HeatmapView({
       next[index] = total;
       return next;
     });
-
-    heatMapDataRef.current = primaryData;
-    setHeatMapData(primaryData);
+    heatMapDataRef.current = zoneData;
+    setHeatMapData(zoneData);
+    retrieveDwellingTime({ siteId: siteID, startDate: window.start, endDate: window.end, signal }).then((dwellResp) => {
+      if (signal.aborted) return;
+      const dwellData = (!dwellResp.error && dwellResp.data) ? dwellResp.data : [];
+      setSegmentDwellingDataMap((prev) => {
+        const next = new Map(prev);
+        next.set(index, dwellData);
+        return next;
+      });
+    });
   }, [segmentDataMap, isProduct]);
 
   const handleShowAll = useCallback(() => {
@@ -853,17 +932,40 @@ function HeatmapView({
   }, []);
 
   useEffect(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfToday = new Date(startOfToday.getTime() + 86400000 - 1);
-    fetchTimelineData(startOfToday.toISOString(), endOfToday.toISOString());
-  }, []);
+    if (rangeRef.current) {
+      fetchTimelineData(rangeRef.current.start, rangeRef.current.end);
+    } else {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfToday = new Date(startOfToday.getTime() + 86400000 - 1);
+      fetchTimelineData(startOfToday.toISOString(), endOfToday.toISOString());
+    }
+    return () => {
+      abortRef.current?.abort();
+    };
+    // Refetch overlay metrics when switching zone ↔ product without remounting the canvas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProduct]);
+
+  useEffect(() => {
+    if (!visible || !editor?.canvas || !canvasRef.current) return;
+    editor.canvas.setWidth(canvasRef.current.clientWidth);
+    editor.canvas.setHeight(canvasRef.current.clientHeight);
+    editor.canvas.requestRenderAll();
+    const id = requestAnimationFrame(() => {
+      try { fitCanvasRef.current(); } catch { }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [visible, editor]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden relative">
       {loading && (
-        <div className="w-full h-full absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="text-sm" style={{ color: colors.text }}>Loading...</div>
+        <div
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 rounded-md px-3 py-1.5 text-xs pointer-events-none"
+          style={{ backgroundColor: `${colors.background}ee`, color: colors.text }}
+        >
+          Loading heatmap…
         </div>
       )}
       <div className="flex-none w-full grid place-content-end py-1">

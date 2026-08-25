@@ -9,6 +9,120 @@ import SensorsSelectedDevicePanel from "./SensorsSelectedDevicePanel";
 
 const TILES_PER_PAGE = 16;
 
+const SensorTile = React.memo(function SensorTile({
+  device,
+  liveData,
+  selected,
+  onSelect,
+}: {
+  device: DisplayDevice;
+  liveData: SensorLiveData | undefined;
+  selected: boolean;
+  onSelect: (device: DisplayDevice) => void;
+}) {
+  const colorDisplay = liveData?.valueDisplay ?? device.lastReadingDisplay;
+  const isColorTile =
+    (device.category === "led" || device.category === "addressable_rgb") &&
+    colorDisplay &&
+    /^#([0-9A-Fa-f]{3}){1,2}$/.test(colorDisplay);
+  const displayOpts = { category: device.category };
+  const lkg = liveData?.history?.length ? liveData.history[liveData.history.length - 1] : null;
+  const rawDisplayValue = liveData
+    ? (liveData.value ?? lkg ?? device.lastReading)
+    : device.lastReading;
+  const displayValue =
+    rawDisplayValue !== null && rawDisplayValue !== undefined
+      ? (liveData ? rawDisplayValue : sanitizeSensorValue(Number(rawDisplayValue) || 0, displayOpts))
+      : null;
+  const displayUnit = liveData?.unit ?? device.unit;
+  const latestData =
+    displayValue !== null
+      ? `${Number(displayValue).toFixed(1)} ${displayUnit}`.trim()
+      : "--";
+  const fields = liveData?.fields ?? device.fields;
+  const fieldKeys = fields ? Object.keys(fields) : [];
+  const hasMultipleFields = fieldKeys.length > 1;
+  const allFieldsList =
+    fieldKeys.length > 0
+      ? fieldKeys.map((k) => {
+          const v = fields![k]?.value ?? device.fields?.[k]?.value;
+          const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
+          const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          return { label, value: safe != null ? safe.toFixed(1) : "—" };
+        })
+      : [];
+
+  return (
+    <button
+      onClick={() => onSelect(device)}
+      className={`group relative p-4 rounded-xl transition-all duration-300 text-left flex flex-col overflow-visible ${hasMultipleFields ? "min-h-[140px]" : "min-h-[120px]"}`}
+      style={{
+        backgroundColor: selected ? `${colors.yellow}15` : colors.backgroundCard,
+        border: `1px solid ${selected ? colors.yellow : colors.border}`,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2 overflow-visible min-h-0">
+        <div
+          className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
+          style={{ backgroundColor: `${colors.yellow}15` }}
+        >
+          {device.icon && (device.icon.startsWith("http") || device.icon.startsWith("/")) ? (
+            <div
+              className="w-8 h-8 shrink-0"
+              style={{
+                backgroundColor: colors.yellow,
+                maskImage: `url(${device.icon})`,
+                maskSize: "contain",
+                maskRepeat: "no-repeat",
+                maskPosition: "center",
+                WebkitMaskImage: `url(${device.icon})`,
+                WebkitMaskSize: "contain",
+                WebkitMaskRepeat: "no-repeat",
+                WebkitMaskPosition: "center",
+              }}
+              role="img"
+              aria-label=""
+            />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke={colors.yellow} strokeWidth={1.5} className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+          )}
+        </div>
+        {isColorTile ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-8 h-8 rounded-lg shrink-0 border border-white/20"
+              style={{ backgroundColor: colorDisplay }}
+              title={colorDisplay}
+            />
+            <span className="text-lg font-bold truncate" style={{ color: colors.yellow }}>
+              {colorDisplay}
+            </span>
+          </div>
+        ) : hasMultipleFields && allFieldsList.length > 0 ? (
+          <div className="flex flex-col gap-1.5 min-w-0 text-right shrink-0 overflow-visible">
+            {allFieldsList.map(({ label, value }) => (
+              <div key={label} className="flex items-baseline justify-end gap-2">
+                <span className="text-sm shrink-0" style={{ color: colors.textMuted }}>{label}:</span>
+                <span className="text-lg font-bold tabular-nums" style={{ color: colors.yellow }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-2xl font-bold tabular-nums truncate" style={{ color: colors.yellow }}>
+            {latestData}
+          </span>
+        )}
+      </div>
+      <p className="text-sm font-medium truncate mt-auto" style={{ color: colors.text }}>
+        {device.type}
+      </p>
+    </button>
+  );
+});
+
 function SensorsGrid({
   devices,
   connectedSensors,
@@ -26,7 +140,6 @@ function SensorsGrid({
 }) {
   const [currentPage, setCurrentPage] = useState(0);
 
-  // Reset to page 0 when devices change
   useEffect(() => {
     setCurrentPage(0);
   }, [devices.length]);
@@ -38,112 +151,17 @@ function SensorsGrid({
   return (
     <>
       <div className="grid grid-cols-4 gap-4">
-        {pageDevices.map((device) => {
-          const liveData = connectedSensors.get(device.tin);
-          const colorDisplay = liveData?.valueDisplay ?? device.lastReadingDisplay;
-          const isColorTile = (device.category === "led" || device.category === "addressable_rgb") && colorDisplay && /^#([0-9A-Fa-f]{3}){1,2}$/.test(colorDisplay);
-          const displayOpts = { category: device.category };
-          const lkg = liveData?.history?.length ? liveData.history[liveData.history.length - 1] : null;
-          const rawDisplayValue = liveData
-            ? (liveData.value ?? lkg ?? device.lastReading)
-            : device.lastReading;
-          const displayValue =
-            rawDisplayValue !== null && rawDisplayValue !== undefined
-              ? (liveData ? rawDisplayValue : sanitizeSensorValue(Number(rawDisplayValue) || 0, displayOpts))
-              : null;
-          const displayUnit = liveData?.unit ?? device.unit;
-          const latestData =
-            displayValue !== null
-              ? `${Number(displayValue).toFixed(1)} ${displayUnit}`.trim()
-              : "--";
-          const fields = liveData?.fields ?? device.fields;
-          const fieldKeys = fields ? Object.keys(fields) : [];
-          const hasMultipleFields = fieldKeys.length > 1;
-          const allFieldsList =
-            fieldKeys.length > 0
-              ? fieldKeys.map((k) => {
-                  const v = fields![k]?.value ?? device.fields?.[k]?.value;
-                  const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
-                  const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                  return { label, value: safe != null ? safe.toFixed(1) : "—" };
-                })
-              : [];
-          return (
-            <button
-              key={device.tin}
-              onClick={() => onSelectDevice(device)}
-              className={`group relative p-4 rounded-xl transition-all duration-300 text-left flex flex-col overflow-visible ${hasMultipleFields ? "min-h-[140px]" : "min-h-[120px]"}`}
-              style={{
-                backgroundColor: selectedDevice?.tin === device.tin ? `${colors.yellow}15` : colors.backgroundCard,
-                border: `1px solid ${selectedDevice?.tin === device.tin ? colors.yellow : colors.border}`,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              }}
-            >
-              {/* Row 1: icon (top-left) + latest data (large value) */}
-              <div className="flex items-start justify-between gap-2 mb-2 overflow-visible min-h-0">
-                <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
-                  style={{ backgroundColor: `${colors.yellow}15` }}
-                >
-                  {device.icon && (device.icon.startsWith("http") || device.icon.startsWith("/")) ? (
-                    <div
-                      className="w-8 h-8 shrink-0"
-                      style={{
-                        backgroundColor: colors.yellow,
-                        maskImage: `url(${device.icon})`,
-                        maskSize: "contain",
-                        maskRepeat: "no-repeat",
-                        maskPosition: "center",
-                        WebkitMaskImage: `url(${device.icon})`,
-                        WebkitMaskSize: "contain",
-                        WebkitMaskRepeat: "no-repeat",
-                        WebkitMaskPosition: "center",
-                      }}
-                      role="img"
-                      aria-label=""
-                    />
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke={colors.yellow} strokeWidth={1.5} className="w-8 h-8">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                    </svg>
-                  )}
-                </div>
-                {isColorTile ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="w-8 h-8 rounded-lg shrink-0 border border-white/20"
-                      style={{ backgroundColor: colorDisplay }}
-                      title={colorDisplay}
-                    />
-                    <span className="text-lg font-bold truncate" style={{ color: colors.yellow }}>
-                      {colorDisplay}
-                    </span>
-                  </div>
-                ) : hasMultipleFields && allFieldsList.length > 0 ? (
-                  <div className="flex flex-col gap-1.5 min-w-0 text-right shrink-0 overflow-visible">
-                    {allFieldsList.map(({ label, value }) => (
-                      <div key={label} className="flex items-baseline justify-end gap-2">
-                        <span className="text-sm shrink-0" style={{ color: colors.textMuted }}>{label}:</span>
-                        <span className="text-lg font-bold tabular-nums" style={{ color: colors.yellow }}>{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-2xl font-bold tabular-nums truncate" style={{ color: colors.yellow }}>
-                    {latestData}
-                  </span>
-                )}
-              </div>
-              {/* Row 2: device type name */}
-              <p className="text-sm font-medium truncate mt-auto" style={{ color: colors.text }}>
-                {device.type}
-              </p>
-            </button>
-          );
-        })}
+        {pageDevices.map((device) => (
+          <SensorTile
+            key={device.tin}
+            device={device}
+            liveData={connectedSensors.get(device.tin)}
+            selected={selectedDevice?.tin === device.tin}
+            onSelect={onSelectDevice}
+          />
+        ))}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 mt-4">
           <button
@@ -205,4 +223,4 @@ function SensorsGrid({
   );
 }
 
-export default SensorsGrid;
+export default React.memo(SensorsGrid);

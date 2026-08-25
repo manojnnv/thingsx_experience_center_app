@@ -8,6 +8,7 @@
  */
 
 import { api, setAccessToken, setRefreshToken, clearTokens } from "@/app/utils/api";
+import { getStoredValue, removeStoredValue, setStoredValue, type StorageKey } from "@/lib/storage";
 
 // ===========================================
 // Types
@@ -42,8 +43,8 @@ interface ApiResponse<T> {
 // ===========================================
 
 const SERVICE_CREDENTIALS = {
-  email: "dev@intellobots.com",
-  password: "intellobots123",
+  email: process.env.NEXT_PUBLIC_SERVICE_EMAIL || "dev@intellobots.com",
+  password: process.env.NEXT_PUBLIC_SERVICE_PASSWORD || "intellobots123",
 };
 
 // ===========================================
@@ -64,8 +65,8 @@ let authPromise: Promise<boolean> | null = null;
  */
 async function login(): Promise<boolean> {
   // If already authenticated, return true
-  if (isAuthenticated && localStorage.getItem("access_token")) {
-    console.log("✅ Already authenticated");
+  if (isAuthenticated && getStoredValue("access_token")) {
+    if (process.env.NODE_ENV === "development") console.log("✅ Already authenticated");
     return true;
   }
 
@@ -78,7 +79,9 @@ async function login(): Promise<boolean> {
   
   authPromise = (async () => {
     try {
-      console.log("🔐 Attempting auto-login for Experience Center...");
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔐 Attempting auto-login for Experience Center...");
+      }
       
       const res = await api.post<ApiResponse<LoginResponseData>>(
         "v1/user/login/v2",
@@ -101,9 +104,9 @@ async function login(): Promise<boolean> {
       }
 
       // Store user data in localStorage
-      const storeIfExists = (key: string, value: unknown) => {
+      const storeIfExists = (key: StorageKey, value: unknown) => {
         if (value !== undefined && value !== null) {
-          localStorage.setItem(key, String(value));
+          setStoredValue(key, String(value));
         }
       };
 
@@ -128,8 +131,10 @@ async function login(): Promise<boolean> {
         (resData.site_ids && resData.site_ids.length > 0 ? resData.site_ids[0] : 1);
       storeIfExists("site_id", resolvedSiteId);
 
-      console.log("✅ Auto-login successful for Experience Center");
-      console.log("📍 Site ID:", resolvedSiteId);
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Auto-login successful for Experience Center");
+        console.log("📍 Site ID:", resolvedSiteId);
+      }
       
       isAuthenticated = true;
       return true;
@@ -149,7 +154,7 @@ async function login(): Promise<boolean> {
  * Check if user is authenticated
  */
 function checkAuth(): boolean {
-  const token = localStorage.getItem("access_token");
+  const token = getStoredValue("access_token");
   isAuthenticated = !!token;
   return isAuthenticated;
 }
@@ -159,7 +164,7 @@ function checkAuth(): boolean {
  */
 async function logout(): Promise<void> {
   try {
-    const accessToken = localStorage.getItem("access_token");
+    const accessToken = getStoredValue("access_token");
     
     if (accessToken) {
       try {
@@ -179,11 +184,11 @@ async function logout(): Promise<void> {
       "session_id", "setup_completed",
     ];
 
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+    keysToRemove.forEach((key) => removeStoredValue(key as StorageKey));
     clearTokens();
     
     isAuthenticated = false;
-    console.log("✅ Logged out successfully");
+    if (process.env.NODE_ENV === "development") console.log("✅ Logged out successfully");
   } catch (error) {
     console.error("❌ Logout error:", error);
     clearTokens();

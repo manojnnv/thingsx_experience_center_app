@@ -30,9 +30,8 @@ export function useSetQueryParam(key: string) {
             params.set(key, newValue);
         }
 
-        // Push full merged URL (creates history entry for back button)
         const url = `${pathname}?${params.toString()}`;
-        router.push(url, { scroll: false });
+        router.replace(url, { scroll: false });
     };
 
     return [value, setValue] as const;

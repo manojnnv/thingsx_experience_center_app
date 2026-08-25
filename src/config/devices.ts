@@ -51,6 +51,8 @@ export const sensorsDeviceTins: SensorConfig[] = [
   { tin: "SN0003000001", displayName: "Rack-3 Load Cell", category: "load_cell" },
 ];
 
+export const sensorConfigByTin = new Map(sensorsDeviceTins.map((c) => [c.tin, c]));
+
 // EPD (E-PAPER DISPLAY) CONFIGURATION
 // For Sensors & Endnodes Experience
 

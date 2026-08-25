@@ -8,6 +8,7 @@
 import { api } from "@/app/utils/api";
 import { toast } from "sonner";
 import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
+import { getSiteId } from "@/config/site";
 
 // Types
 export interface EPDDevice {
@@ -52,7 +53,7 @@ export const getAllEPDDevices = async (): Promise<ServiceResult<EPDDevice[]>> =>
 export const getDeviceCategories = async (): Promise<ServiceResult<string[]>> => {
   try {
     const resp = await api.post("/v1/device/categories", {
-      site_id: localStorage.getItem("site_id"),
+      site_id: getSiteId(),
     });
     return ok(resp?.data?.data || []);
   } catch (error) {
@@ -159,7 +160,7 @@ export const retrieveDevicesForBulk = async (
     const resp = await api.post("/v1/device/bulk/retrieve", {
       device_code: deviceCode,
       config_option: configOption,
-      site_id: localStorage.getItem("site_id"),
+      site_id: getSiteId(),
     });
     toast.message(resp?.data?.message);
     return ok(resp?.data?.data?.content || []);

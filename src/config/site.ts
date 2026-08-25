@@ -5,6 +5,8 @@
  * This is used for all API calls that require a site_id.
  */
 
+import { getStoredValue } from "@/lib/storage";
+
 export const siteConfig = {
   // Experience Center site ID
   siteId: "1",
@@ -21,12 +23,12 @@ export const siteConfig = {
  * Uses the configured site ID or falls back to localStorage
  */
 export function getSiteId(): string {
-  return siteConfig.siteId || localStorage.getItem("site_id") || "1";
+  return siteConfig.siteId || getStoredValue("site_id", "1") || "1";
 }
 
 /**
  * Get the organization ID for API calls
  */
 export function getOrgId(): string {
-  return siteConfig.orgId || localStorage.getItem("org_id") || "1";
+  return siteConfig.orgId || getStoredValue("org_id", "1") || "1";
 }

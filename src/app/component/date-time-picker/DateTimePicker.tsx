@@ -1,5 +1,6 @@
 import * as React from "react";
 import { DateRangePicker } from "rsuite";
+import "rsuite/DateRangePicker/styles/index.css";
 import AppButton from "../app-button/AppButton";
 import "./datePicker.css";
 

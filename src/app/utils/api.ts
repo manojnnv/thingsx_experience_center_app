@@ -11,6 +11,7 @@ import axios, {
   InternalAxiosRequestConfig,
   isAxiosError,
 } from "axios";
+import { getStoredValue, removeStoredValue, setStoredValue } from "@/lib/storage";
 
 // API Base URL
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://tgx-app-api.sit.intellobots.com";
@@ -42,28 +43,22 @@ function serializeAxiosError(error: unknown) {
 
 // Access token in memory
 let accessToken: string | null =
-  typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  typeof window !== "undefined" ? getStoredValue("access_token") || null : null;
 
 export const setAccessToken = (token: string) => {
   accessToken = token;
-  if (typeof window !== "undefined") {
-    localStorage.setItem("access_token", token);
-  }
+  setStoredValue("access_token", token);
   api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 };
 
 export const setRefreshToken = (token: string) => {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("refresh_token", token);
-  }
+  setStoredValue("refresh_token", token);
 };
 
 export const clearTokens = () => {
   accessToken = null;
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-  }
+  removeStoredValue("access_token");
+  removeStoredValue("refresh_token");
   delete api.defaults.headers.common["Authorization"];
 };
 
@@ -110,7 +105,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean; _retry429Count?: number };
-    const refreshToken = typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null;
+    const refreshToken = typeof window !== "undefined" ? getStoredValue("refresh_token") || null : null;
 
     // Handle 429 Too Many Requests with exponential backoff
     if (error.response?.status === 429 && originalRequest) {

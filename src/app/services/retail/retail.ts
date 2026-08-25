@@ -90,13 +90,22 @@ async function toggleLEDPower(tin: string, isOn: boolean): Promise<{ success: bo
  */
 async function bulkUpdateLEDs(tins: string[], color: string, brightness: number, mode: LEDControlPayload["mode"]): Promise<{ success: boolean; error: string | null }> {
   try {
-    const promises = tins.map((tin) =>
-      api.post("/v1/device/config/update", {
-        tin: tin,
-        data: { color, brightness, mode },
-      })
-    );
-    await Promise.all(promises);
+    const CHUNK_SIZE = 3;
+    for (let i = 0; i < tins.length; i += CHUNK_SIZE) {
+      const chunk = tins.slice(i, i + CHUNK_SIZE);
+      const results = await Promise.allSettled(
+        chunk.map((tin) =>
+          api.post("/v1/device/config/update", {
+            tin,
+            data: { color, brightness, mode },
+          })
+        )
+      );
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) {
+        throw (failed as PromiseRejectedResult).reason;
+      }
+    }
     return { success: true, error: null };
   } catch (error) {
     console.error("Error bulk updating LEDs:", error);

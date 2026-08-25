@@ -11,6 +11,26 @@ import {
 } from "@/app/services/sensors/sensors";
 import { formatDateTime } from "@/app/utils/dateTime";
 
+type ConfigSchemaProperty = {
+  type?: string;
+  title?: string;
+  description?: string;
+  default?: string | number;
+  data?: string | number;
+  readOnly?: boolean;
+  ui?: {
+    widget?: string;
+  };
+  validators?: Array<{ type?: string; pattern?: string; min?: number; max?: number }>;
+  properties?: Record<string, ConfigSchemaProperty>;
+};
+
+type ConfigSchema = {
+  version?: string;
+  type?: string;
+  properties?: Record<string, ConfigSchemaProperty>;
+};
+
 function SensorsSelectedDevicePanel({
   selectedDevice,
   connectedSensors,
@@ -22,28 +42,6 @@ function SensorsSelectedDevicePanel({
   centralEndnode: { displayName: string };
   onClose: () => void;
 }) {
-  if (!selectedDevice) return null;
-
-  type ConfigSchemaProperty = {
-    type?: string;
-    title?: string;
-    description?: string;
-    default?: string | number;
-    data?: string | number;
-    readOnly?: boolean;
-    ui?: {
-      widget?: string;
-    };
-    validators?: Array<{ type?: string; pattern?: string; min?: number; max?: number }>;
-    properties?: Record<string, ConfigSchemaProperty>;
-  };
-
-  type ConfigSchema = {
-    version?: string;
-    type?: string;
-    properties?: Record<string, ConfigSchemaProperty>;
-  };
-
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configSchema, setConfigSchema] = useState<ConfigSchema | null>(null);
@@ -53,8 +51,9 @@ function SensorsSelectedDevicePanel({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [deviceDetails, setDeviceDetails] = useState<Record<string, any> | null>(null);
 
-  const liveSensorData = connectedSensors.get(selectedDevice.tin);
+  const liveSensorData = selectedDevice ? connectedSensors.get(selectedDevice.tin) : undefined;
   const latestDataItems = useMemo(() => {
+    if (!selectedDevice) return [];
     // 1. Check live polled data (from 3s polling)
     if (liveSensorData?.fields && Object.keys(liveSensorData.fields).length > 0) {
       return Object.entries(liveSensorData.fields).map(([key, item]) => ({
@@ -101,51 +100,6 @@ function SensorsSelectedDevicePanel({
     return [];
   }, [liveSensorData, deviceDetails?.latest_data, selectedDevice]);
 
-  useEffect(() => {
-    let mounted = true;
-    const loadDetails = async () => {
-      setDetailsLoading(true);
-      setDetailsError(null);
-      const result = await getDeviceDetails(selectedDevice.tin);
-      if (mounted) {
-        if (result.error) {
-          setDetailsError(result.error);
-          setDeviceDetails(null);
-        } else {
-          setDeviceDetails(result.data || null);
-        }
-      }
-      if (mounted) {
-        setDetailsLoading(false);
-      }
-    };
-
-    const loadConfig = async () => {
-      setConfigLoading(true);
-      setConfigError(null);
-      const result = await getDeviceConfig(selectedDevice.tin);
-      if (mounted) {
-        if (result.error) {
-          setConfigError(result.error);
-          setConfigSchema(null);
-          setConfigValues({});
-        } else {
-          const schema = (result.data || null) as ConfigSchema | null;
-          setConfigSchema(schema);
-          setConfigValues(extractInitialData(schema));
-        }
-        setConfigLoading(false);
-      }
-    };
-
-    loadConfig();
-    loadDetails();
-
-    return () => {
-      mounted = false;
-    };
-  }, [selectedDevice.tin]);
-
   const extractInitialData = useCallback((schema: ConfigSchema | null) => {
     if (!schema?.properties) return {};
     const walk = (properties: Record<string, ConfigSchemaProperty>) => {
@@ -164,6 +118,51 @@ function SensorsSelectedDevicePanel({
     };
     return walk(schema.properties);
   }, []);
+
+  useEffect(() => {
+    if (!selectedDevice) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const tin = selectedDevice.tin;
+
+    const loadDetails = async () => {
+      setDetailsLoading(true);
+      setDetailsError(null);
+      const result = await getDeviceDetails(tin, signal);
+      if (signal.aborted) return;
+      if (result.error) {
+        setDetailsError(result.error);
+        setDeviceDetails(null);
+      } else {
+        setDeviceDetails(result.data || null);
+      }
+      setDetailsLoading(false);
+    };
+
+    const loadConfig = async () => {
+      setConfigLoading(true);
+      setConfigError(null);
+      const result = await getDeviceConfig(tin, signal);
+      if (signal.aborted) return;
+      if (result.error) {
+        setConfigError(result.error);
+        setConfigSchema(null);
+        setConfigValues({});
+      } else {
+        const schema = (result.data || null) as ConfigSchema | null;
+        setConfigSchema(schema);
+        setConfigValues(extractInitialData(schema));
+      }
+      setConfigLoading(false);
+    };
+
+    loadConfig();
+    loadDetails();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedDevice?.tin, extractInitialData]);
 
   const handleValueChange = useCallback(
     (path: string[], value: string | number) => {
@@ -187,6 +186,7 @@ function SensorsSelectedDevicePanel({
   );
 
   const handleSaveConfig = useCallback(async () => {
+    if (!selectedDevice) return;
     setConfigSaving(true);
     try {
       const result = await updateDeviceConfig(selectedDevice.tin, configValues);
@@ -196,7 +196,13 @@ function SensorsSelectedDevicePanel({
     } finally {
       setConfigSaving(false);
     }
-  }, [configValues, selectedDevice.tin]);
+  }, [configValues, selectedDevice]);
+
+  const configEntries = useMemo(() => {
+    return Object.entries(configSchema?.properties || {});
+  }, [configSchema]);
+
+  if (!selectedDevice) return null;
 
   const detailsContent = (
     <div className="space-y-6">
@@ -354,10 +360,6 @@ function SensorsSelectedDevicePanel({
       </div>
     </div>
   );
-
-  const configEntries = useMemo(() => {
-    return Object.entries(configSchema?.properties || {});
-  }, [configSchema]);
 
   const renderField = (
     path: string[],

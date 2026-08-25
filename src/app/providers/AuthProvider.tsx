@@ -37,14 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Check if already authenticated
         if (checkAuth()) {
-          console.log("✅ Already authenticated");
+          if (process.env.NODE_ENV === "development") console.log("✅ Already authenticated");
           setIsAuthenticated(true);
           setIsLoading(false);
           return;
         }
 
         // Attempt auto-login
-        console.log("🔐 Initiating auto-login...");
+        if (process.env.NODE_ENV === "development") console.log("🔐 Initiating auto-login...");
         const success = await login();
         
         if (success) {

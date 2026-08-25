@@ -1,7 +1,11 @@
+import axios from "axios";
+
 export type ServiceResult<T> = {
   data: T | null;
   error: string | null;
 };
+
+export const isRequestCanceled = (error: unknown) => axios.isCancel(error);
 
 export const ok = <T>(data: T): ServiceResult<T> => ({
   data,

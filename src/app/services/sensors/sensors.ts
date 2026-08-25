@@ -6,9 +6,10 @@
  */
 
 import { api } from "@/app/utils/api";
-import { sensorsDeviceTins, getSensorTins, categoryConfig, categoryToLogo, LOGOS_BASE, uint32ToFloat32Categories } from "@/config/devices";
+import { sensorConfigByTin, getSensorTins, categoryConfig, categoryToLogo, LOGOS_BASE, uint32ToFloat32Categories } from "@/config/devices";
+import { getOrgId, getSiteId } from "@/config/site";
 import { toast } from "sonner";
-import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
+import { fail, getErrorMessage, isRequestCanceled, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 // Types
 export interface DeviceFromAPI {
@@ -87,7 +88,7 @@ export interface TreeViewNode {
 export const fetchConfiguredDevices = async (): Promise<ServiceResult<Device[]>> => {
   try {
     const resp = await api.post("/v1/device/retrieval", {
-      org_id: localStorage.getItem("org_id"),
+      org_id: getOrgId(),
     });
 
     const allDevices: DeviceFromAPI[] = resp?.data?.data || [];
@@ -100,7 +101,7 @@ export const fetchConfiguredDevices = async (): Promise<ServiceResult<Device[]>>
 
     // Map to our Device type with config overrides
     const mappedDevices: Device[] = filteredDevices.map((device) => {
-      const config = sensorsDeviceTins.find((c) => c.tin === device.tin);
+      const config = sensorConfigByTin.get(device.tin);
       const category = config?.category || "sensor";
       const categoryInfo = categoryConfig[category] || { label: "Sensor", unit: "", icon: "sensor" };
       const status: Device["status"] = device.status === "online" ? "online" : "offline";
@@ -182,11 +183,12 @@ export function sanitizeSensorValue(
  * Some IoT sensors transmit raw float bytes that the API backend exposes as
  * plain integer values instead of proper floats.
  */
+const _decodeBuf = new ArrayBuffer(4);
+const _decodeView = new DataView(_decodeBuf);
+
 export function decodeUint32AsFloat32(rawUint32: number): number {
-  const buf = new ArrayBuffer(4);
-  const dv = new DataView(buf);
-  dv.setUint32(0, rawUint32 >>> 0, false);
-  return dv.getFloat32(0, false);
+  _decodeView.setUint32(0, rawUint32 >>> 0, false);
+  return _decodeView.getFloat32(0, false);
 }
 
 /**
@@ -232,7 +234,7 @@ export const fetchDevicesByDeviceCode = async (
   deviceCode: string
 ): Promise<ServiceResult<DeviceByCode[]>> => {
   try {
-    const siteId = typeof window !== "undefined" ? localStorage.getItem("site_id") : null;
+    const siteId = typeof window !== "undefined" ? getSiteId() : null;
     if (!siteId) return ok([]);
     const resp = await api.post("/v1/site/devices-by-device-code", {
       site_id: siteId,
@@ -251,8 +253,7 @@ export const fetchDevicesByDeviceCodes = async (
   const uniqueCodes = Array.from(new Set(deviceCodes.filter(Boolean)));
   const allDevices: DeviceByCode[] = [];
 
-  // Fetch in chunks of 3 with a short delay between batches to avoid 429 rate limits
-  const CHUNK_SIZE = 3;
+  const CHUNK_SIZE = 6;
   for (let i = 0; i < uniqueCodes.length; i += CHUNK_SIZE) {
     const chunk = uniqueCodes.slice(i, i + CHUNK_SIZE);
     const results = await Promise.allSettled(
@@ -263,9 +264,6 @@ export const fetchDevicesByDeviceCodes = async (
         allDevices.push(...res.value.data);
       }
     });
-    if (i + CHUNK_SIZE < uniqueCodes.length) {
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
   }
 
   return ok(allDevices);
@@ -278,7 +276,7 @@ export const fetchDeviceMetrics = async (
 ): Promise<ServiceResult<MetricRecord[]>> => {
   try {
     const resp = await api.post("/v1/device/metrics", {
-      site_id: localStorage.getItem("site_id"),
+      site_id: getSiteId(),
       tins,
       start_date: startDate,
       end_date: endDate,
@@ -294,14 +292,14 @@ export const fetchDeviceMetrics = async (
  * Get device details by TIN
  */
 export const getDeviceDetails = async (
-  tin: string
+  tin: string,
+  signal?: AbortSignal
 ): Promise<ServiceResult<DeviceDetails | null>> => {
   try {
-    const resp = await api.post("/v1/device/details", {
-      tin,
-    });
+    const resp = await api.post("/v1/device/details", { tin }, { signal });
     return ok(resp?.data?.data ?? null);
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     console.error("Error fetching device details:", error);
     return fail(getErrorMessage(error, "Failed to fetch device details"));
   }
@@ -313,8 +311,8 @@ export const getDeviceDetails = async (
 export const getDeviceTreeView = async (): Promise<ServiceResult<TreeViewNode[]>> => {
   try {
     const resp = await api.post("/v1/device/tree-view", {
-      org_id: localStorage.getItem("org_id"),
-      site_id: localStorage.getItem("site_id"),
+      org_id: getOrgId(),
+      site_id: getSiteId(),
     });
     return ok(resp?.data?.data || []);
   } catch (error) {
@@ -357,7 +355,7 @@ export const fetchSensorMetrics = async (
       }
       const parsed = parseMetricValue(entry.Value, { metric: entry.Metric });
       // Decode raw sensor value if needed (e.g. uint32→float32 for MICS-5524)
-      const sensorCfg = sensorsDeviceTins.find(c => c.tin === tin);
+      const sensorCfg = sensorConfigByTin.get(tin);
       if (parsed.value !== null && sensorCfg?.category) {
         parsed.value = maybeDecodeSensorValue(parsed.value, sensorCfg.category);
       }
@@ -395,14 +393,14 @@ export const fetchSensorMetrics = async (
  * Get device config schema
  */
 export const getDeviceConfig = async (
-  tin: string
+  tin: string,
+  signal?: AbortSignal
 ): Promise<ServiceResult<Record<string, unknown> | null>> => {
   try {
-    const resp = await api.post("v1/device/config/get", {
-      tin,
-    });
+    const resp = await api.post("v1/device/config/get", { tin }, { signal });
     return ok(resp?.data?.data?.schema ?? null);
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     console.error("Error fetching device config:", error);
     return fail(getErrorMessage(error, "Failed to fetch device config"));
   }
@@ -475,17 +473,21 @@ export type LatestDataPayload = Record<
  * Uses POST /v1/device/latest_data (body: { tin: "TIN1,TIN2,..." }).
  */
 export const fetchLatestSensorData = async (
-  tins: string[]
+  tins: string[],
+  signal?: AbortSignal
 ): Promise<ServiceResult<LatestDataPayload>> => {
   try {
-    const resp = await api.post("/v1/device/latest_data", {
-      tin: tins.join(","),
-    });
+    const resp = await api.post(
+      "/v1/device/latest_data",
+      { tin: tins.join(",") },
+      { signal }
+    );
     if (resp?.data?.status === "success" && resp.data.data) {
       return ok(resp.data.data as LatestDataPayload);
     }
     return fail(resp?.data?.message || "Unexpected response from latest_data");
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     return fail(getErrorMessage(error, "Failed to fetch latest sensor data"));
   }
 };

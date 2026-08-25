@@ -1,5 +1,4 @@
 "use client";
-import AppLoading from "@/app/component/app-loading/AppLoading";
 import React, { useEffect, useRef, useState } from "react";
 import * as fabric from "fabric";
 import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
@@ -12,13 +11,17 @@ import { useSelector } from "react-redux";
 import AppButton from "@/app/component/app-button/AppButton";
 import { colors } from "@/config/theme";
 import { API_BASE_URL } from "@/app/utils/api";
+import { getStoredValue } from "@/lib/storage";
 
 interface WarehouseIndoorPositioningTabProps {
   accentColor?: string;
+  visible?: boolean;
 }
 
-function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioningTabProps) {
-  const [loading, setLoading] = useState(false);
+function WarehouseIndoorPositioningTab({
+  accentColor,
+  visible = true,
+}: WarehouseIndoorPositioningTabProps) {
   const { editor, onReady } = useFabricJSEditor();
   const image = "/assets/Warehouse Layout Preview Black.jpg";
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -202,7 +205,7 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
       const url = `${SSE_URL_BASE}?asset_id=${encodeURIComponent(selectAsset)}`;
       const token =
         typeof window !== "undefined"
-          ? localStorage.getItem("access_token")
+          ? getStoredValue("access_token")
           : null;
       const controller = new AbortController();
       const signal = controller.signal;
@@ -468,106 +471,96 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     };
   }, [editor]);
 
-  // Load the floorplan image into the canvas
+  // Load the floorplan image into the canvas once
   useEffect(() => {
     if (!editor?.canvas) return;
     const canvas = editor.canvas;
+    const existing = canvas.getObjects().find((o: any) => o.isLayout);
+    if (existing) return;
 
-    try {
-      const existing = canvas.getObjects().find((o: any) => o.isLayout);
-      if (existing) canvas.remove(existing);
-    } catch (e) { }
+    let cancelled = false;
+    fabric.Image.fromURL(image as string)
+      .then((fimg: fabric.Image) => {
+        if (cancelled) return;
+        try {
+          const origW = fimg.width || 0;
+          const origH = fimg.height || 0;
+          const cW = canvas.getWidth() || 1;
+          const cH = canvas.getHeight() || 1;
+          const scale = Math.min(cW / origW, cH / origH, 1) * 0.9;
+          const displayW = origW * scale;
+          const displayH = origH * scale;
+          const left = Math.max(0, (cW - displayW) / 2);
+          const top = Math.max(0, (cH - displayH) / 2);
 
-    try {
-      const loader = new window.Image();
-      loader.src = image as string;
-      loader.onload = () => {
-        const origW = loader.naturalWidth || loader.width || 0;
-        const origH = loader.naturalHeight || loader.height || 0;
+          fimg.set({
+            left,
+            top,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            hasBorders: false,
+            originX: "left",
+            originY: "top",
+          });
+          fimg.scaleX = scale;
+          fimg.scaleY = scale;
+          (fimg as any).__originalWidth = origW;
+          (fimg as any).__originalHeight = origH;
+          (fimg as any).isLayout = true;
 
-        fabric.Image.fromURL(image as string)
-          .then((fimg: fabric.Image) => {
-            try {
-              const cW = canvas.getWidth() || 1;
-              const cH = canvas.getHeight() || 1;
-              const scale = Math.min(cW / origW, cH / origH, 1) * 0.9;
-              const displayW = origW * scale;
-              const displayH = origH * scale;
-              const left = Math.max(0, (cW - displayW) / 2);
-              const top = Math.max(0, (cH - displayH) / 2);
+          canvas.add(fimg);
+          try { canvas.sendObjectToBack(fimg); } catch { }
 
-              fimg.set({
-                left,
-                top,
-                selectable: false,
-                evented: false,
-                hasControls: false,
-                hasBorders: false,
-                originX: "left",
-                originY: "top",
-              });
-              fimg.scaleX = scale;
-              fimg.scaleY = scale;
-              (fimg as any).__originalWidth = origW;
-              (fimg as any).__originalHeight = origH;
-              (fimg as any).isLayout = true;
+          try { setDottedGridBackground(); } catch { }
 
-              canvas.add(fimg);
-              try { canvas.sendObjectToBack(fimg); } catch (e) { }
+          const corners = [
+            { x: left, y: top, label: "TL (0,0)", color: "red" },
+            { x: left + displayW, y: top, label: "TR (523,0)", color: "blue" },
+            { x: left, y: top + displayH, label: "BL (0,-427)", color: "green" },
+            { x: left + displayW, y: top + displayH, label: "BR (523,-427)", color: "purple" },
+          ];
 
-              try { setDottedGridBackground(); } catch (e) { }
+          corners.forEach((corner) => {
+            const circle = new fabric.Circle({
+              left: corner.x - 5,
+              top: corner.y - 5,
+              radius: 5,
+              fill: corner.color,
+              stroke: "#fff",
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+            });
+            const text = new fabric.Text(corner.label, {
+              left: corner.x + 10,
+              top: corner.y - 10,
+              fontSize: 12,
+              fill: corner.color,
+              backgroundColor: "rgba(255,255,255,0.7)",
+              selectable: false,
+              evented: false,
+            });
+            canvas.add(circle);
+            canvas.add(text);
+          });
 
-              // Corner coordinate labels
-              const corners = [
-                { x: left, y: top, label: "TL (0,0)", color: "red" },
-                { x: left + displayW, y: top, label: "TR (523,0)", color: "blue" },
-                { x: left, y: top + displayH, label: "BL (0,-427)", color: "green" },
-                { x: left + displayW, y: top + displayH, label: "BR (523,-427)", color: "purple" },
-              ];
+          canvas.requestRenderAll();
+        } catch { }
+      })
+      .catch(() => { });
 
-              corners.forEach((corner) => {
-                const circle = new fabric.Circle({
-                  left: corner.x - 5,
-                  top: corner.y - 5,
-                  radius: 5,
-                  fill: corner.color,
-                  stroke: "#fff",
-                  strokeWidth: 1,
-                  selectable: false,
-                  evented: false,
-                });
-                const text = new fabric.Text(corner.label, {
-                  left: corner.x + 10,
-                  top: corner.y - 10,
-                  fontSize: 12,
-                  fill: corner.color,
-                  backgroundColor: "rgba(255,255,255,0.7)",
-                  selectable: false,
-                  evented: false,
-                });
-                canvas.add(circle);
-                canvas.add(text);
-              });
-
-              canvas.requestRenderAll();
-            } catch (e) { }
-          })
-          .catch(() => { });
-      };
-      loader.onerror = () => {
-        fabric.Image.fromURL(image as string)
-          .then((fimg: fabric.Image) => {
-            fimg.set({ left: 0, top: 0, selectable: false, evented: false });
-            (fimg as any).isLayout = true;
-            canvas.add(fimg);
-            try { canvas.sendObjectToBack(fimg); } catch (e) { }
-            try { setDottedGridBackground(); } catch (e) { }
-            canvas.requestRenderAll();
-          })
-          .catch(() => { });
-      };
-    } catch (e) { }
+    return () => {
+      cancelled = true;
+    };
   }, [editor, image]);
+
+  useEffect(() => {
+    if (!visible || !editor?.canvas || !canvasRef.current) return;
+    editor.canvas.setWidth(canvasRef.current.clientWidth);
+    editor.canvas.setHeight(canvasRef.current.clientHeight);
+    editor.canvas.requestRenderAll();
+  }, [visible, editor]);
 
   // Cleanup SSE on unmount
   useEffect(() => {
@@ -595,34 +588,25 @@ function WarehouseIndoorPositioningTab({ accentColor }: WarehouseIndoorPositioni
     };
   }, [editor]);
 
-  // Fetch all assets
+  // Fetch all assets — do not block the floorplan on this request
   useEffect(() => {
-    try {
-      setLoading(true);
-      const fetchAssets = async () => {
-        const response = await getAllAssetData(siteID);
-        const activeAsset = response?.filter(
-          (asset: any) => asset?.active_tracking
-        );
-        setAllAsset(activeAsset);
-      };
-      fetchAssets();
-    } catch (error) {
-      setLoading(false);
-    } finally {
-      setLoading(false);
-    }
+    let cancelled = false;
+    const fetchAssets = async () => {
+      const response = await getAllAssetData(siteID);
+      if (cancelled) return;
+      const activeAsset = response?.filter(
+        (asset: any) => asset?.active_tracking
+      );
+      setAllAsset(activeAsset);
+    };
+    fetchAssets();
+    return () => {
+      cancelled = true;
+    };
   }, [siteID]);
 
   return (
     <div className="relative w-full h-full flex flex-col">
-      {loading && (
-        <div className="w-full h-full absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="text-lg font-semibold">
-            <AppLoading />
-          </div>
-        </div>
-      )}
       <div className="flex-none text-[1.2rem] font-semibold py-1" style={{ color: colors.text }}>Indoor Positioning</div>
       <div className="flex-none flex gap-2 justify-between items-end pb-1">
         <AppSelect

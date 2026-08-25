@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { colors } from "@/config/theme";
 import { toast } from "sonner";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
@@ -9,11 +10,17 @@ import { getCameras, getVideoFeedV2, CameraStream, ModelConfig } from "@/app/ser
 import {
   RetailHeader,
   RetailStreamTab,
-  RetailHeatmapView,
 } from "@/app/component/app-retail";
 import type { DropdownOption } from "@/app/component/app-retail/types";
 import { useExperienceState } from "@/hooks/useExperienceState";
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
+import { getLayout } from "@/lib/layout";
+import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary";
+
+const RetailHeatmapView = dynamic(
+  () => import("@/app/component/app-retail/RetailAnalyticsTab").then((m) => ({ default: m.RetailHeatmapView })),
+  { ssr: false }
+);
 
 // ===========================================
 // Page Accent Color
@@ -62,6 +69,20 @@ function RetailExperienceContent() {
   const previousModel = useRef<string | null>(null);
   const isStreamRunning = useRef(false);
   const pendingStreamConfig = useRef<{ cameraName: string } | null>(null);
+  const [heatmapVisited, setHeatmapVisited] = useState(false);
+
+  const heatmapVisible =
+    activeTab === TABS.analytics || activeTab === TABS.productInteraction;
+  const heatmapMode = activeTab === TABS.productInteraction ? "product" : "zone";
+
+  useEffect(() => {
+    void getLayout();
+    void import("@/app/component/app-retail/RetailAnalyticsTab");
+  }, []);
+
+  useEffect(() => {
+    if (heatmapVisible) setHeatmapVisited(true);
+  }, [heatmapVisible]);
 
   // ===========================================
   // Derived State
@@ -91,9 +112,11 @@ function RetailExperienceContent() {
       setCamerasLoading(true);
       try {
         const result = await getCameras();
-        if (result.data) {
+          if (result.data) {
           setCameras(result.data);
-          console.log("Loaded cameras:", result.data);
+          if (process.env.NODE_ENV === "development") {
+            console.log("Loaded cameras:", result.data);
+          }
         }
       } catch (error) {
         console.error("Error loading cameras:", error);
@@ -273,8 +296,8 @@ function RetailExperienceContent() {
         />
 
         {/* Content */}
-        <main className="px-8 py-2 flex-1 min-h-0">
-          {activeTab === TABS.stream && (
+        <main className="px-8 py-2 flex-1 min-h-0 relative">
+          <div className={activeTab === TABS.stream ? "h-full" : "hidden"}>
             <RetailStreamTab
               accent={accent}
               camerasLoading={camerasLoading}
@@ -295,12 +318,22 @@ function RetailExperienceContent() {
               onOpenVideo={() => window.open(videoUrl, "_blank")}
               onViewAnalytics={() => setActiveTab(TABS.productInteraction)}
             />
-          )}
-          {activeTab === TABS.analytics && (
-            <RetailHeatmapView mode="zone" accent={accent} />
-          )}
-          {activeTab === TABS.productInteraction && (
-            <RetailHeatmapView mode="product" accent={accent} onViewStream={handleViewStream} />
+          </div>
+          {(heatmapVisited || heatmapVisible) && (
+            <div
+              className={
+                heatmapVisible
+                  ? "h-full"
+                  : "invisible pointer-events-none absolute inset-0"
+              }
+            >
+              <RetailHeatmapView
+                mode={heatmapMode}
+                accent={accent}
+                onViewStream={handleViewStream}
+                visible={heatmapVisible}
+              />
+            </div>
           )}
         </main>
       </div>
@@ -323,8 +356,10 @@ function RetailPageFallback() {
 
 export default function RetailExperiencePage() {
   return (
-    <Suspense fallback={<RetailPageFallback />}>
-      <RetailExperienceContent />
-    </Suspense>
+    <ExperienceErrorBoundary>
+      <Suspense fallback={<RetailPageFallback />}>
+        <RetailExperienceContent />
+      </Suspense>
+    </ExperienceErrorBoundary>
   );
 }

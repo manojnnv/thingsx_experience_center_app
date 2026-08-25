@@ -15,6 +15,7 @@ import { formatDateAndTime } from "@/app/utils/dateTime";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MapPin, Table2, GitCommitHorizontal } from "lucide-react";
 import { colors } from "@/config/theme";
+import { getSiteId } from "@/config/site";
 
 type Asset = {
   asset_id: string;
@@ -446,7 +447,7 @@ function WarehousePassiveTrackingTab({
     const fetchAssets = async () => {
       setLoading(true);
       try {
-        const siteID = localStorage.getItem("site_id") || "";
+        const siteID = getSiteId();
         const response = await getAllAssetData(siteID);
         if (cancelled) return;
         const passiveTracking = (response ?? []).filter(

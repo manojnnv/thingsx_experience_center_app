@@ -171,8 +171,10 @@ async function getVideoFeedV2(
       message: responseData?.message,
     };
     
-    console.log("Video feed response:", responseData);
-    console.log("Parsed result:", result);
+    if (process.env.NODE_ENV === "development") {
+      console.log("Video feed response:", responseData);
+      console.log("Parsed result:", result);
+    }
     
     return ok(result);
   } catch (error: unknown) {

@@ -1,7 +1,8 @@
 "use client";
 
 import { api } from "@/app/utils/api";
-import { fail, getErrorMessage, ok, ServiceResult } from "@/app/services/serviceUtils";
+import { getSiteId } from "@/config/site";
+import { fail, getErrorMessage, isRequestCanceled, ok, ServiceResult } from "@/app/services/serviceUtils";
 
 export interface ZoneHeatmapData {
   zone_id: number | string;
@@ -29,15 +30,21 @@ const zoneCountHeatMap = async (params: {
   siteId: string;
   startDate?: string;
   endDate?: string;
+  signal?: AbortSignal;
 }): Promise<ServiceResult<ZoneHeatmapData[]>> => {
   try {
-    const resp = await api.post("/v1/metrics/zone_counts_heatmap", {
-      site_id: params.siteId || localStorage.getItem("site_id"),
-      start_date: params.startDate,
-      end_date: params.endDate,
-    });
+    const resp = await api.post(
+      "/v1/metrics/zone_counts_heatmap",
+      {
+        site_id: params.siteId || getSiteId(),
+        start_date: params.startDate,
+        end_date: params.endDate,
+      },
+      { signal: params.signal }
+    );
     return ok(resp?.data?.data || []);
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     return fail(getErrorMessage(error, "Failed to load zone heatmap"));
   }
 };
@@ -46,15 +53,21 @@ const productInteraction = async (params: {
   siteId: string;
   startDate?: string;
   endDate?: string;
+  signal?: AbortSignal;
 }): Promise<ServiceResult<ProductInteractionData[]>> => {
   try {
-    const resp = await api.post("/v1/metrics/product_interaction_heatmap", {
-      site_id: params.siteId || localStorage.getItem("site_id"),
-      start_date: params.startDate,
-      end_date: params.endDate,
-    });
+    const resp = await api.post(
+      "/v1/metrics/product_interaction_heatmap",
+      {
+        site_id: params.siteId || getSiteId(),
+        start_date: params.startDate,
+        end_date: params.endDate,
+      },
+      { signal: params.signal }
+    );
     return ok(resp?.data?.data || []);
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     return fail(getErrorMessage(error, "Failed to load product heatmap"));
   }
 };
@@ -89,16 +102,22 @@ const retrieveDwellingTime = async (params: {
   startDate?: string;
   endDate?: string;
   aggregation?: string;
+  signal?: AbortSignal;
 }): Promise<ServiceResult<any[]>> => {
   try {
-    const resp = await api.post("/v1/metrics/dwelling_time", {
-      site_id: params.siteId || localStorage.getItem("site_id"),
-      from_date: params.startDate,
-      to_date: params.endDate,
-      aggregation: params.aggregation || "avg",
-    });
+    const resp = await api.post(
+      "/v1/metrics/dwelling_time",
+      {
+        site_id: params.siteId || getSiteId(),
+        from_date: params.startDate,
+        to_date: params.endDate,
+        aggregation: params.aggregation || "avg",
+      },
+      { signal: params.signal }
+    );
     return ok(resp?.data?.data || []);
   } catch (error) {
+    if (isRequestCanceled(error)) return fail("");
     return fail(getErrorMessage(error, "Failed to load dwelling time"));
   }
 };

@@ -14,17 +14,17 @@ export const theme = {
     backgroundElevated: "#0d0d10",
 
     // Text colors
-    text: " #ffffff",
-    textMuted: " #ffffff",
-    textSubtle: " #ffffff",
-    textFaint: " #ffffff",
-    textDim: " #ffffff",
+    text: "#ffffff",
+    textMuted: "#ffffff",
+    textSubtle: "#ffffff",
+    textFaint: "#ffffff",
+    textDim: "#ffffff",
 
     // Border colors
-    border: " #1a1a1a",
-    borderSubtle: " #151515",
+    border: "#1a1a1a",
+    borderSubtle: "#151515",
 
-    // Accent colors
+    // Semantic aliases of primary — the kiosk is intentionally monochrome green
     orange: "#00E676",
     purple: "#00E676",
     blue: "#00E676",
@@ -40,8 +40,8 @@ export const theme = {
     innovationLabAccent: "#00E676", // Green for Innovation Lab
 
     // Star/constellation colors
-    starBright: " #00E676",
-    starDim: " #ffffff",
+    starBright: "#00E676",
+    starDim: "#ffffff",
 
     // Shadow colors
     shadowDark: "rgba(0, 0, 0, 0.4)",

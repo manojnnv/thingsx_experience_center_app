@@ -6,6 +6,7 @@
 
 import { api } from "@/app/utils/api";
 import { toast } from "sonner";
+import { getSiteId } from "@/config/site";
 
 export interface Asset {
   asset_id: number;
@@ -28,7 +29,7 @@ export interface AssetPosition {
 export const getAllAssetData = async (siteID: string) => {
   try {
     const resp = await api.post("/v1/asset/fetch_all", {
-      site_id: siteID || localStorage.getItem("site_id"),
+      site_id: siteID || getSiteId(),
     });
     toast.message(resp?.data?.message);
     return resp?.data?.data;

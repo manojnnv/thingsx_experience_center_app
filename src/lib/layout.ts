@@ -11,7 +11,9 @@ export interface LayoutData {
   [key: string]: any;
 }
 
-export async function getLayout(): Promise<ServiceResult<LayoutData | null>> {
+let layoutPromise: Promise<ServiceResult<LayoutData | null>> | null = null;
+
+async function fetchLayout(): Promise<ServiceResult<LayoutData | null>> {
   try {
     const response = await api.post("/v1/layout/get", {
       org_id: getOrgId(),
@@ -26,6 +28,17 @@ export async function getLayout(): Promise<ServiceResult<LayoutData | null>> {
   } catch (error) {
     return fail(getErrorMessage(error, "Failed to load layout"));
   }
+}
+
+/** Single-flight cache for the session — concurrent callers share one request. */
+export async function getLayout(): Promise<ServiceResult<LayoutData | null>> {
+  if (!layoutPromise) {
+    layoutPromise = fetchLayout().then((result) => {
+      if (result.error) layoutPromise = null;
+      return result;
+    });
+  }
+  return layoutPromise;
 }
 
 export function parseLayoutJson(layout: LayoutData | null): LayoutData | null {

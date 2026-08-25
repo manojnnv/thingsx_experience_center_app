@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { colors } from "@/config/theme";
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
+import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary";
 
 // Roadmap stage labels (from reference image)
 const JOURNEY_STAGES = [
@@ -55,6 +56,7 @@ export default function InnovationLabPage() {
   const gridColor = `${(accent || "").trim()}12`;
 
   return (
+    <ExperienceErrorBoundary>
     <div
       className="h-screen text-white relative flex flex-col overflow-hidden"
       style={{
@@ -231,5 +233,6 @@ export default function InnovationLabPage() {
       </main>
       <VideoLibraryButton />
     </div>
+    </ExperienceErrorBoundary>
   );
 }

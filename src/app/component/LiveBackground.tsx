@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { animate } from "animejs";
 import { colors } from "@/config/theme";
 
 interface Particle {
@@ -25,7 +24,6 @@ export function LiveBackground() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -33,7 +31,6 @@ export function LiveBackground() {
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    // Initialize particles
     const particleCount = 50;
     particlesRef.current = Array.from({ length: particleCount }).map(() => ({
       x: Math.random() * canvas.width,
@@ -43,44 +40,46 @@ export function LiveBackground() {
       radius: Math.random() * 2 + 1,
     }));
 
-    // Mouse tracking
     const handleMouseMove = (e: MouseEvent) => {
       mouseRef.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener("mousemove", handleMouseMove);
 
-    // Animation loop
-    const animate = () => {
+    let running = true;
+    let visible = document.visibilityState === "visible";
+    let onScreen = true;
+
+    const tick = () => {
+      if (!running) return;
+      if (!visible || !onScreen) {
+        animationFrameRef.current = undefined;
+        return;
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const particles = particlesRef.current;
       const mouse = mouseRef.current;
 
-      // Update and draw particles
       particles.forEach((particle, i) => {
-        // Update position
         particle.x += particle.vx;
         particle.y += particle.vy;
 
-        // Bounce off edges
         if (particle.x < 0 || particle.x > canvas.width) particle.vx *= -1;
         if (particle.y < 0 || particle.y > canvas.height) particle.vy *= -1;
 
-        // Keep particles in bounds
         particle.x = Math.max(0, Math.min(canvas.width, particle.x));
         particle.y = Math.max(0, Math.min(canvas.height, particle.y));
 
-        // Mouse interaction
         const dx = mouse.x - particle.x;
         const dy = mouse.y - particle.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < 150) {
+        if (distance < 150 && distance > 0) {
           const force = (150 - distance) / 150;
           particle.vx -= (dx / distance) * force * 0.02;
           particle.vy -= (dy / distance) * force * 0.02;
         }
 
-        // Draw particle
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
         ctx.fillStyle = colors.primary;
@@ -88,18 +87,17 @@ export function LiveBackground() {
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // Draw connections
         particles.slice(i + 1).forEach((other) => {
-          const dx = particle.x - other.x;
-          const dy = particle.y - other.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
+          const odx = particle.x - other.x;
+          const ody = particle.y - other.y;
+          const odistance = Math.sqrt(odx * odx + ody * ody);
 
-          if (distance < 120) {
+          if (odistance < 120) {
             ctx.beginPath();
             ctx.moveTo(particle.x, particle.y);
             ctx.lineTo(other.x, other.y);
             ctx.strokeStyle = colors.primary;
-            ctx.globalAlpha = (120 - distance) / 120 * 0.2;
+            ctx.globalAlpha = ((120 - odistance) / 120) * 0.2;
             ctx.lineWidth = 1;
             ctx.stroke();
             ctx.globalAlpha = 1;
@@ -107,14 +105,38 @@ export function LiveBackground() {
         });
       });
 
-      animationFrameRef.current = requestAnimationFrame(animate);
+      animationFrameRef.current = requestAnimationFrame(tick);
     };
 
-    animate();
+    const start = () => {
+      if (animationFrameRef.current == null && visible && onScreen && running) {
+        animationFrameRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    const handleVisibility = () => {
+      visible = document.visibilityState === "visible";
+      if (visible) start();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        if (onScreen) start();
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
+
+    start();
 
     return () => {
+      running = false;
       window.removeEventListener("resize", resizeCanvas);
       window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      observer.disconnect();
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }

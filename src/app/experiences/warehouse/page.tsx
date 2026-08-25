@@ -1,12 +1,27 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { colors } from "@/config/theme";
-import { WarehouseHeader, WarehouseIndoorPositioningTab, WarehousePassiveTrackingTab, WarehouseRailCamTab } from "@/app/component/app-warehouse";
+import WarehouseHeader from "@/app/component/app-warehouse/WarehouseHeader";
 import ThemedToaster from "@/app/component/app-toaster/ThemedToaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 import { useExperienceState } from "@/hooks/useExperienceState";
 import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryButton";
+import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary";
+
+const WarehouseIndoorPositioningTab = dynamic(
+  () => import("@/app/component/app-warehouse/WarehouseIndoorPositioningTab"),
+  { ssr: false }
+);
+const WarehousePassiveTrackingTab = dynamic(
+  () => import("@/app/component/app-warehouse/WarehousePassiveTrackingTab"),
+  { ssr: false }
+);
+const WarehouseRailCamTab = dynamic(
+  () => import("@/app/component/app-warehouse/WarehouseRailCamTab"),
+  { ssr: false }
+);
 
 // Tab configuration
 const TABS = {
@@ -17,12 +32,42 @@ const TABS = {
 
 const TABS_ARRAY = Object.values(TABS);
 
+function KeepAlivePane({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={active ? "h-full" : "invisible pointer-events-none absolute inset-0"}
+    >
+      {children}
+    </div>
+  );
+}
+
 function WarehouseExperienceContent() {
   const { isReady, activeTab, setActiveTab } = useExperienceState({
     pageKey: "warehouse",
     tabs: TABS_ARRAY,
     defaultTab: TABS.indoorPositioning,
   });
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+
+  const shownTabs = visitedTabs.has(activeTab)
+    ? visitedTabs
+    : new Set([...visitedTabs, activeTab]);
 
   // Show minimal loading state until localStorage check is complete
   if (!isReady) {
@@ -53,20 +98,26 @@ function WarehouseExperienceContent() {
           />
 
           {/* Content Area */}
-          <main className="px-8 py-2 flex-1 min-h-0">
-            {/* Indoor Positioning Tab */}
-            {activeTab === TABS.indoorPositioning && (
-              <WarehouseIndoorPositioningTab accentColor={colors.warehouseAccent} />
+          <main className="px-8 py-2 flex-1 min-h-0 relative">
+            {shownTabs.has(TABS.indoorPositioning) && (
+              <KeepAlivePane active={activeTab === TABS.indoorPositioning}>
+                <WarehouseIndoorPositioningTab
+                  accentColor={colors.warehouseAccent}
+                  visible={activeTab === TABS.indoorPositioning}
+                />
+              </KeepAlivePane>
             )}
 
-            {/* Passive Tracking Tab */}
-            {activeTab === TABS.passiveTracking && (
-              <WarehousePassiveTrackingTab accentColor={colors.warehouseAccent} />
+            {shownTabs.has(TABS.passiveTracking) && (
+              <KeepAlivePane active={activeTab === TABS.passiveTracking}>
+                <WarehousePassiveTrackingTab accentColor={colors.warehouseAccent} />
+              </KeepAlivePane>
             )}
 
-            {/* Rail Cam Tab */}
-            {activeTab === TABS.railCam && (
-              <WarehouseRailCamTab accentColor={colors.warehouseAccent} />
+            {shownTabs.has(TABS.railCam) && (
+              <KeepAlivePane active={activeTab === TABS.railCam}>
+                <WarehouseRailCamTab accentColor={colors.warehouseAccent} />
+              </KeepAlivePane>
             )}
           </main>
         </div>
@@ -89,9 +140,10 @@ function WarehousePageFallback() {
 
 export default function WarehouseExperiencePage() {
   return (
-    <Suspense fallback={<WarehousePageFallback />}>
-      <WarehouseExperienceContent />
-    </Suspense>
+    <ExperienceErrorBoundary>
+      <Suspense fallback={<WarehousePageFallback />}>
+        <WarehouseExperienceContent />
+      </Suspense>
+    </ExperienceErrorBoundary>
   );
 }
-
