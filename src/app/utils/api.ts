@@ -31,10 +31,10 @@ function serializeAxiosError(error: unknown) {
     },
     response: error.response
       ? {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-        }
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+      }
       : null,
     code: error.code,
   };
@@ -69,10 +69,12 @@ export const clearTokens = () => {
 
 export const handleLogout = () => {
   clearTokens();
+  // For this kiosk-style app, silently re-authenticate instead of redirecting
+  // to the landing page. Dynamic import avoids circular dependency with auth.ts.
   if (typeof window !== "undefined") {
-    setTimeout(() => {
-      window.location.href = "/";
-    }, 100);
+    import("@/app/services/auth/auth").then(({ login }) => login()).catch(() => {
+      console.error("❌ Silent re-login failed after token refresh failure");
+    });
   }
 };
 

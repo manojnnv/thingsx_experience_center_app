@@ -289,15 +289,41 @@ function SensorsTopologyInner({
 
   // Fixed positions for EVERY configured device — layout never shifts.
   // Only recomputes when the device list itself changes.
+  // Multi-field sensors are interleaved among normals and pushed to a wider
+  // orbit so their taller label blocks don't overlap neighbours.
   const sensorPositions = React.useMemo(
-    () => devices.map((device, i) => {
-      const angle = (i / Math.max(devices.length, 1)) * 2 * Math.PI - Math.PI / 2;
-      return {
-        tin: device.tin,
-        x: 50 + 35 * Math.cos(angle),
-        y: 50 + 35 * Math.sin(angle),
-      };
-    }),
+    () => {
+      const multiFieldTins = new Set(
+        devices
+          .filter((d) => {
+            const mvFields = multiValueSensorFields[d.category];
+            return mvFields && mvFields.length > 1;
+          })
+          .map((d) => d.tin)
+      );
+      const normal: typeof devices = [];
+      const multi: typeof devices = [];
+      devices.forEach((d) => (multiFieldTins.has(d.tin) ? multi : normal).push(d));
+
+      // Interleave: spread multi-field sensors evenly among the normals
+      const interleaved: typeof devices = [...normal];
+      multi.forEach((m, idx) => {
+        const insertAt = Math.round(((idx + 1) / (multi.length + 1)) * interleaved.length);
+        interleaved.splice(insertAt, 0, m);
+      });
+
+      return interleaved.map((device, i) => {
+        const angle = (i / Math.max(interleaved.length, 1)) * 2 * Math.PI - Math.PI / 2;
+        const isMulti = multiFieldTins.has(device.tin);
+        // Push multi-field sensors to a wider orbit for label clearance
+        const radius = isMulti ? 42 : 35;
+        return {
+          tin: device.tin,
+          x: 50 + radius * Math.cos(angle),
+          y: 50 + radius * Math.sin(angle),
+        };
+      });
+    },
     [devices]
   );
 
