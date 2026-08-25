@@ -305,10 +305,13 @@ function SensorsTopologyInner({
       const multi: typeof devices = [];
       devices.forEach((d) => (multiFieldTins.has(d.tin) ? multi : normal).push(d));
 
-      // Interleave: spread multi-field sensors evenly among the normals
+      // Insert multi-field sensors near the TOP of the circle (upper-right)
+      // so their taller label blocks extend downward into open space and
+      // don't get clipped at the bottom of the viewBox.
+      // Index 0 = 12 o'clock; low indices = upper-right area.
       const interleaved: typeof devices = [...normal];
       multi.forEach((m, idx) => {
-        const insertAt = Math.round(((idx + 1) / (multi.length + 1)) * interleaved.length);
+        const insertAt = Math.min(1 + idx * 4, interleaved.length);
         interleaved.splice(insertAt, 0, m);
       });
 
