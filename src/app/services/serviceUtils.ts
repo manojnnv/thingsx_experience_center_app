@@ -5,7 +5,17 @@ export type ServiceResult<T> = {
   error: string | null;
 };
 
-export const isRequestCanceled = (error: unknown) => axios.isCancel(error);
+export const isRequestCanceled = (error: unknown) => {
+  if (axios.isCancel(error)) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error && typeof error === "object") {
+    const e = error as { code?: string; name?: string };
+    if (e.code === "ERR_CANCELED" || e.name === "CanceledError" || e.name === "AbortError") {
+      return true;
+    }
+  }
+  return false;
+};
 
 export const ok = <T>(data: T): ServiceResult<T> => ({
   data,

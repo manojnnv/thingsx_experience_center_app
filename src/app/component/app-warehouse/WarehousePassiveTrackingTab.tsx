@@ -8,10 +8,16 @@ import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
 import { Button } from "@/app/components/ui/button";
 import {
   getAllAssetData,
-  passiveAssetTracking,
+  fillLocatedZoneNames,
   passiveAssetTrackingRoadmap,
 } from "@/app/services/assets/asset";
-import { formatDateAndTime } from "@/app/utils/dateTime";
+import {
+  formatDateAndTime,
+  formatIstDate,
+  formatIstDateTime,
+  formatIstTime,
+  parseUtcTimestamp,
+} from "@/app/utils/dateTime";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MapPin, Table2, GitCommitHorizontal } from "lucide-react";
 import { colors } from "@/config/theme";
@@ -38,23 +44,36 @@ interface WarehousePassiveTrackingTabProps {
   accentColor?: string;
 }
 
-/** Format a datetime string to a short, readable form */
+/** Format UTC API timestamps to IST for display. */
 function formatShortTime(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
-  } catch {
-    return dateStr;
-  }
+  return formatIstTime(dateStr) || dateStr;
 }
 
 function formatShortDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  } catch {
-    return dateStr;
-  }
+  return formatIstDate(dateStr) || dateStr;
+}
+
+function getZoneName(stop: PassiveTrackingRecord): string {
+  const name = stop.located_zone_name?.trim();
+  if (name && name.toLowerCase() !== "null") return name;
+  return stop.located_tin || "—";
+}
+
+/** Recency is last detection (`to_time`), not when the stop started. */
+function getStopRecencyMs(stop: PassiveTrackingRecord): number {
+  const toMs = parseUtcTimestamp(stop.to_time).getTime();
+  if (!Number.isNaN(toMs)) return toMs;
+  return parseUtcTimestamp(stop.from_time).getTime();
+}
+
+function sortByRecency(
+  records: PassiveTrackingRecord[],
+  direction: "asc" | "desc"
+): PassiveTrackingRecord[] {
+  const sign = direction === "asc" ? 1 : -1;
+  return [...records].sort(
+    (a, b) => sign * (getStopRecencyMs(a) - getStopRecencyMs(b))
+  );
 }
 
 /** Compute duration between two datetime strings */
@@ -82,10 +101,8 @@ function PassiveTrackingRoadmap({
   data: PassiveTrackingRecord[];
   accentColor: string;
 }) {
-  // Sort chronologically (earliest first)
-  const sorted = [...data].sort(
-    (a, b) => new Date(a.from_time).getTime() - new Date(b.from_time).getTime()
-  );
+  // Oldest last-detection on the left, Last Seen on the right
+  const sorted = sortByRecency(data, "asc");
 
   if (sorted.length === 0) {
     return (
@@ -99,7 +116,12 @@ function PassiveTrackingRoadmap({
     );
   }
 
-  const lastIndex = sorted.length - 1;
+  const lastChronologicalIndex = sorted.length - 1;
+  const lastSeenIndex = sorted.reduce((latest, stop, idx) => {
+    const latestMs = new Date(sorted[latest].to_time).getTime();
+    const currentMs = new Date(stop.to_time).getTime();
+    return currentMs >= latestMs ? idx : latest;
+  }, 0);
 
   // Height of the circle wrapper div — line is vertically centered inside it
   const CIRCLE_WRAP_H = 80; // px
@@ -162,9 +184,11 @@ function PassiveTrackingRoadmap({
         style={{ minWidth: `${Math.max(sorted.length * 200, 600)}px` }}
       >
         {sorted.map((stop, idx) => {
-          const isLast = idx === lastIndex;
+          const isLastSeen = idx === lastSeenIndex;
           const isFirst = idx === 0;
+          const isLastChronological = idx === lastChronologicalIndex;
           const duration = getDuration(stop.from_time, stop.to_time);
+          const zoneName = getZoneName(stop);
 
           return (
             <div
@@ -182,8 +206,8 @@ function PassiveTrackingRoadmap({
                   className="relative flex items-center justify-center"
                   style={{ height: `${CIRCLE_WRAP_H}px`, width: "52px" }}
                 >
-                  {/* Pulse ring — last node only */}
-                  {isLast && (
+                  {/* Pulse ring — last seen node only */}
+                  {isLastSeen && (
                     <div
                       className="absolute rounded-full animate-ping"
                       style={{
@@ -201,22 +225,22 @@ function PassiveTrackingRoadmap({
                     style={{
                       width: "32px",
                       height: "32px",
-                      backgroundColor: isLast
+                      backgroundColor: isLastSeen
                         ? `${accentColor}25`
                         : "rgba(255,255,255,0.04)",
-                      border: `2px solid ${isLast ? accentColor : accentColor + "60"}`,
-                      boxShadow: isLast ? `0 0 16px ${accentColor}50` : "none",
+                      border: `2px solid ${isLastSeen ? accentColor : accentColor + "60"}`,
+                      boxShadow: isLastSeen ? `0 0 16px ${accentColor}50` : "none",
                     }}
                   />
 
                   {/* Inner dot */}
                   <div
-                    className="rounded-full relative z-10"
+                    className="rounded-full relative"
                     style={{
                       width: "14px",
                       height: "14px",
-                      backgroundColor: isLast ? accentColor : accentColor + "aa",
-                      boxShadow: isLast ? `0 0 10px ${accentColor}` : "none",
+                      backgroundColor: isLastSeen ? accentColor : accentColor + "aa",
+                      boxShadow: isLastSeen ? `0 0 10px ${accentColor}` : "none",
                     }}
                   />
                 </div>
@@ -226,20 +250,20 @@ function PassiveTrackingRoadmap({
                   className="rounded-lg p-3 text-center transition-all duration-200"
                   style={{
                     width: "148px",
-                    backgroundColor: isLast
+                    backgroundColor: isLastSeen
                       ? `${accentColor}10`
                       : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${isLast ? accentColor + "40" : "rgba(255,255,255,0.07)"}`,
-                    boxShadow: isLast ? `0 0 20px ${accentColor}15` : "none",
+                    border: `1px solid ${isLastSeen ? accentColor + "40" : "rgba(255,255,255,0.07)"}`,
+                    boxShadow: isLastSeen ? `0 0 20px ${accentColor}15` : "none",
                   }}
                 >
                   {/* Zone name */}
                   <div
-                    className="text-xs font-semibold truncate mb-1"
-                    style={{ color: isLast ? accentColor : "rgba(255,255,255,0.85)" }}
-                    title={stop.located_zone_name}
+                    className="text-xs font-semibold truncate mb-1 min-h-[1rem]"
+                    style={{ color: isLastSeen ? accentColor : "rgba(255,255,255,0.85)" }}
+                    title={zoneName}
                   >
-                    {stop.located_zone_name}
+                    {zoneName}
                   </div>
 
                   {/* TIN badge */}
@@ -257,7 +281,7 @@ function PassiveTrackingRoadmap({
                   {/* Time range */}
                   <div className="space-y-0.5">
                     <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                      {formatShortDate(stop.from_time)}
+                      {formatShortDate(stop.from_time)} IST
                     </div>
                     <div
                       className="text-[11px] font-medium"
@@ -284,19 +308,19 @@ function PassiveTrackingRoadmap({
                     <div
                       className="mt-2 inline-block text-[10px] px-2 py-0.5 rounded-full"
                       style={{
-                        backgroundColor: isLast
+                        backgroundColor: isLastSeen
                           ? `${accentColor}20`
                           : "rgba(255,255,255,0.05)",
-                        color: isLast ? accentColor : "rgba(255,255,255,0.35)",
-                        border: `1px solid ${isLast ? accentColor + "30" : "rgba(255,255,255,0.06)"}`,
+                        color: isLastSeen ? accentColor : "rgba(255,255,255,0.35)",
+                        border: `1px solid ${isLastSeen ? accentColor + "30" : "rgba(255,255,255,0.06)"}`,
                       }}
                     >
                       {duration}
                     </div>
                   )}
 
-                  {/* Last Seen badge — final node */}
-                  {isLast && (
+                  {/* Last Seen badge */}
+                  {isLastSeen && (
                     <div
                       className="mt-2 text-[9px] font-semibold uppercase tracking-wider"
                       style={{ color: accentColor }}
@@ -305,7 +329,7 @@ function PassiveTrackingRoadmap({
                     </div>
                   )}
                   {/* Start label — first node when there are multiple */}
-                  {isFirst && !isLast && (
+                  {isFirst && !isLastSeen && (
                     <div
                       className="mt-2 text-[9px] uppercase tracking-wider"
                       style={{ color: "rgba(255,255,255,0.2)" }}
@@ -317,7 +341,7 @@ function PassiveTrackingRoadmap({
               </div>
 
               {/* Right connector half — hidden on the last node */}
-              <div style={connectorStyle(!isLast)} />
+              <div style={connectorStyle(!isLastChronological)} />
             </div>
           );
         })}
@@ -333,12 +357,8 @@ function WarehousePassiveTrackingTab({
   const [loading, setLoading] = useState(false);
   const [selectAsset, setSelectedAsset] = useState<string>();
   const [dateAndTime, setDateAndTime] = useState<string[]>([]);
-  // Roadmap uses the experience-center API; table uses the legacy passive-tracking API
-  const [roadmapData, setRoadmapData] = useState<PassiveTrackingRecord[]>([]);
-  const [columnsData, setColumnsData] = useState<{ field: string }[]>([]);
-  const [tableData, setTableData] = useState<PassiveTrackingRecord[]>([]);
+  const [trackingData, setTrackingData] = useState<PassiveTrackingRecord[]>([]);
   const [allAsset, setAllAsset] = useState<Asset[]>([]);
-  /** "roadmap" is default; "table" is the legacy view */
   const [viewMode, setViewMode] = useState<"roadmap" | "table">("roadmap");
 
   const generateColumns = (keys: string[]): ColumnDef<any>[] => {
@@ -356,16 +376,25 @@ function WarehousePassiveTrackingTab({
       ),
       cell: ({ row }) => {
         const value = row.getValue(key);
-        return key === "led_color" ? (
-          <div className="flex items-center justify-start gap-2 px-2 py-1">
-            <div
-              className="w-4 h-4 rounded"
-              style={{ backgroundColor: value as string }}
-            />
-          </div>
-        ) : (
+        if (key === "led_color") {
+          return (
+            <div className="flex items-center justify-start gap-2 px-2 py-1">
+              <div
+                className="w-4 h-4 rounded"
+                style={{ backgroundColor: value as string }}
+              />
+            </div>
+          );
+        }
+        const display =
+          (key === "from_time" || key === "to_time") && typeof value === "string"
+            ? formatIstDateTime(value)
+            : key === "located_zone_name"
+              ? getZoneName(row.original as PassiveTrackingRecord)
+              : (value as string);
+        return (
           <div className="ml-2" style={{ color: colors.text }}>
-            {value as string}
+            {display}
           </div>
         );
       },
@@ -381,8 +410,8 @@ function WarehousePassiveTrackingTab({
     setDateAndTime(isoDates);
   };
 
-  /** Fetch roadmap data from the experience-center endpoint */
-  const fetchRoadmapData = async () => {
+  /** Fetch tracking data used by both roadmap and table views */
+  const fetchTrackingData = async () => {
     setLoading(true);
     try {
       const response = await passiveAssetTrackingRoadmap({
@@ -390,55 +419,14 @@ function WarehousePassiveTrackingTab({
         startDate: dateAndTime[0],
         endDate: dateAndTime[1],
       });
-      setRoadmapData(response ?? []);
+      const records: PassiveTrackingRecord[] = Array.isArray(response)
+        ? response
+        : [];
+      setTrackingData(await fillLocatedZoneNames(records));
     } catch {
       // error is already handled by the service via toast
     } finally {
       setLoading(false);
-    }
-  };
-
-  /** Fetch table data from the original passive-tracking endpoint */
-  const fetchTableData = async (assetId?: string, dates?: string[]) => {
-    setLoading(true);
-    try {
-      const response = await passiveAssetTracking({
-        asset_id: assetId ?? selectAsset ?? "",
-        startDate: dates?.[0] ?? dateAndTime[0],
-        endDate: dates?.[1] ?? dateAndTime[1],
-      });
-      const uniqueData: PassiveTrackingRecord[] = response ?? [];
-      const columnKeys =
-        uniqueData.length > 0 ? Object.keys(uniqueData[0]) : [];
-      setColumnsData(
-        columnKeys.map((item) => ({ field: item, filter: "agTextColumnFilter" }))
-      );
-      setTableData(uniqueData);
-    } catch {
-      // error is already handled by the service via toast
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * Called by DateTimePicker submit button.
-   * Always fetches roadmap (the primary/default view).
-   * If the user is already on table view, fetch table data instead.
-   */
-  const fetchAssetsByDateTime = async () => {
-    if (viewMode === "table") {
-      await fetchTableData();
-    } else {
-      await fetchRoadmapData();
-    }
-  };
-
-  /** Handle view-mode toggle: auto-fetch table data when switching to table */
-  const handleViewModeChange = async (mode: "roadmap" | "table") => {
-    setViewMode(mode);
-    if (mode === "table") {
-      await fetchTableData();
     }
   };
 
@@ -478,7 +466,7 @@ function WarehousePassiveTrackingTab({
       )}
 
       {/* ── Header row ── */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="relative z-20 flex justify-between items-center mb-4">
         <div
           className="text-lg font-semibold"
           style={{ color: accentColor }}
@@ -493,7 +481,7 @@ function WarehousePassiveTrackingTab({
             style={{ border: `1px solid ${accentColor}40` }}
           >
             <button
-              onClick={() => handleViewModeChange("roadmap")}
+              onClick={() => setViewMode("roadmap")}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-all duration-200"
               style={{
                 backgroundColor:
@@ -509,7 +497,7 @@ function WarehousePassiveTrackingTab({
               Roadmap
             </button>
             <button
-              onClick={() => handleViewModeChange("table")}
+              onClick={() => setViewMode("table")}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-all duration-200"
               style={{
                 backgroundColor:
@@ -540,7 +528,7 @@ function WarehousePassiveTrackingTab({
           <div>
             <DateTimePicker
               onchange={onChangeDateAndTime}
-              onsubmit={fetchAssetsByDateTime}
+              onsubmit={fetchTrackingData}
             />
           </div>
         </div>
@@ -549,14 +537,14 @@ function WarehousePassiveTrackingTab({
       {/* ── Content area ── */}
       {viewMode === "roadmap" ? (
         <div
-          className="rounded-lg"
+          className="rounded-lg isolate"
           style={{
             backgroundColor: colors.backgroundCard,
             border: `1px solid ${colors.border}`,
             minHeight: "340px",
           }}
         >
-          <PassiveTrackingRoadmap data={roadmapData} accentColor={accentColor} />
+          <PassiveTrackingRoadmap data={trackingData} accentColor={accentColor} />
         </div>
       ) : (
         <div
@@ -568,9 +556,9 @@ function WarehousePassiveTrackingTab({
         >
           <DataTable
             columns={generateColumns(
-              (columnsData || []).map((col) => col.field)
+              trackingData.length > 0 ? Object.keys(trackingData[0]) : []
             )}
-            data={tableData}
+            data={sortByRecency(trackingData, "desc")}
           />
         </div>
       )}

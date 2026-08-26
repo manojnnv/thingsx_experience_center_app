@@ -34,10 +34,10 @@ import VideoLibraryButton from "@/app/component/app-video-library/VideoLibraryBu
 import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary";
 
 // Constants
-const ACTIVE_POLL_INTERVAL_MS = 3000; // Poll live data every 3 seconds when active
+const ACTIVE_POLL_INTERVAL_MS = 4000; // Poll live data every 4 seconds when active
 const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
 const STALE_THRESHOLD_MS = 300000; // Sensor considered inactive if no data in 5 minutes
-const MISS_THRESHOLD = 3; // Remove sensor after 3 consecutive empty polls (~9s)
+const MISS_THRESHOLD = 5; // Remove sensor after 5 consecutive empty polls (~20s)
 
 const TABS = {
   grid: "Component Matrix",
@@ -231,7 +231,7 @@ function SensorsPageContent() {
     setDeviceParam(null);
   };
 
-  // ─── Live Data Polling (3-second interval) ─────────────────────────
+  // ─── Live Data Polling (4-second interval) ─────────────────────────
   useEffect(() => {
     if (!devicesLoaded || pollTinsRef.current.length === 0) return;
 
@@ -360,7 +360,7 @@ function SensorsPageContent() {
       // ── Consecutive-miss logic ──────────────────────────────────────
       // For TINs that were previously tracked but NOT in this API response,
       // increment their miss counter. Only remove after MISS_THRESHOLD
-      // consecutive misses (~9s). This prevents single-poll hiccups from
+      // consecutive misses (~20s). This prevents single-poll hiccups from
       // causing sensors to flash in/out.
       const tinsToRemove = new Set<string>();
       lastValuesRef.current.forEach((_, tin) => {

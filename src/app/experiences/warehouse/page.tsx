@@ -41,7 +41,11 @@ function KeepAlivePane({
 }) {
   return (
     <div
-      className={active ? "h-full" : "invisible pointer-events-none absolute inset-0"}
+      className={
+        active
+          ? "relative z-[1] h-full"
+          : "invisible pointer-events-none absolute inset-0 z-0"
+      }
     >
       {children}
     </div>

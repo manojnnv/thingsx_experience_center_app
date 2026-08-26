@@ -6,32 +6,41 @@ import "./datePicker.css";
 
 type DateRangeValue = Date[] | null;
 
+/** Local midnight through now — the default heatmap / picker window. */
+export function getTodayRange(): [Date, Date] {
+  const endTime = new Date();
+  const startTime = new Date(endTime.getFullYear(), endTime.getMonth(), endTime.getDate());
+  return [startTime, endTime];
+}
+
 function DateTimePicker({
   className,
   onchange,
   onsubmit,
+  value,
 }: {
   className?: string;
   onchange?: (value: DateRangeValue) => void;
   onsubmit?: () => void;
+  value?: DateRangeValue;
 }) {
-  // Set default value to today starting at 00:00 until now as a tuple [Date, Date]
-  const defaultDateRange: [Date, Date] = React.useMemo(() => {
-    const endTime = new Date();
-    const startTime = new Date(endTime);
-    startTime.setHours(0, 0, 0, 0);
-    return [startTime, endTime];
-  }, []);
+  const defaultDateRange: [Date, Date] = React.useMemo(() => getTodayRange(), []);
+  const isControlled = Array.isArray(value) && value.length >= 2;
+  const selected = isControlled ? (value as [Date, Date]) : defaultDateRange;
 
   return (
-    <div className={`w-full flex items-center gap-2 ${className} z-50`}>
+    <div className={`w-full flex items-center gap-2 relative ${className}`}>
       <DateRangePicker
-        placement="auto"
+        placement="bottomEnd"
+        preventOverflow
+        container={() => document.body}
+        menuStyle={{ zIndex: 1400 }}
         placeholder={"Start date - End date"}
-        defaultValue={defaultDateRange} // Set default value as tuple
-        onChange={(value: DateRangeValue) => {
+        value={isControlled ? selected : undefined}
+        defaultValue={isControlled ? undefined : defaultDateRange}
+        onChange={(next: DateRangeValue) => {
           if (onchange) {
-            onchange(value ?? null);
+            onchange(next ?? null);
           }
         }}
         format="MM/dd/yyyy HH:mm"

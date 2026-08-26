@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { colors } from "@/config/theme";
 import { toast } from "sonner";
@@ -40,6 +40,28 @@ const TABS = {
 
 const TABS_ARRAY = Object.values(TABS);
 
+const HEATMAP_TABS = [TABS.analytics, TABS.productInteraction] as const;
+
+function KeepAlivePane({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={
+        active
+          ? "relative z-[1] h-full"
+          : "invisible pointer-events-none absolute inset-0 z-0"
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
 // ===========================================
 // Main Component (uses useSearchParams via useQueryParams — must be inside Suspense)
 // ===========================================
@@ -69,11 +91,7 @@ function RetailExperienceContent() {
   const previousModel = useRef<string | null>(null);
   const isStreamRunning = useRef(false);
   const pendingStreamConfig = useRef<{ cameraName: string } | null>(null);
-  const [heatmapVisited, setHeatmapVisited] = useState(false);
-
-  const heatmapVisible =
-    activeTab === TABS.analytics || activeTab === TABS.productInteraction;
-  const heatmapMode = activeTab === TABS.productInteraction ? "product" : "zone";
+  const [visitedHeatmapTabs, setVisitedHeatmapTabs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     void getLayout();
@@ -81,8 +99,20 @@ function RetailExperienceContent() {
   }, []);
 
   useEffect(() => {
-    if (heatmapVisible) setHeatmapVisited(true);
-  }, [heatmapVisible]);
+    if (!HEATMAP_TABS.includes(activeTab as (typeof HEATMAP_TABS)[number])) return;
+    setVisitedHeatmapTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+
+  const shownHeatmapTabs = visitedHeatmapTabs.has(activeTab)
+    ? visitedHeatmapTabs
+    : HEATMAP_TABS.includes(activeTab as (typeof HEATMAP_TABS)[number])
+      ? new Set([...visitedHeatmapTabs, activeTab])
+      : visitedHeatmapTabs;
 
   // ===========================================
   // Derived State
@@ -319,21 +349,25 @@ function RetailExperienceContent() {
               onViewAnalytics={() => setActiveTab(TABS.productInteraction)}
             />
           </div>
-          {(heatmapVisited || heatmapVisible) && (
-            <div
-              className={
-                heatmapVisible
-                  ? "h-full"
-                  : "invisible pointer-events-none absolute inset-0"
-              }
-            >
+          {shownHeatmapTabs.has(TABS.analytics) && (
+            <KeepAlivePane active={activeTab === TABS.analytics}>
               <RetailHeatmapView
-                mode={heatmapMode}
+                mode="zone"
                 accent={accent}
                 onViewStream={handleViewStream}
-                visible={heatmapVisible}
+                visible={activeTab === TABS.analytics}
               />
-            </div>
+            </KeepAlivePane>
+          )}
+          {shownHeatmapTabs.has(TABS.productInteraction) && (
+            <KeepAlivePane active={activeTab === TABS.productInteraction}>
+              <RetailHeatmapView
+                mode="product"
+                accent={accent}
+                onViewStream={handleViewStream}
+                visible={activeTab === TABS.productInteraction}
+              />
+            </KeepAlivePane>
           )}
         </main>
       </div>

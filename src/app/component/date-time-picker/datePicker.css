@@ -55,7 +55,12 @@
   box-shadow: 0 0 0 3px var(--datepicker-shadow) !important;
 }
 
-/* Popup / dropdown background */
+/* Popup / dropdown — sit above roadmap nodes (dots use z-10; rsuite default is 7) */
+.rs-picker-popup {
+  z-index: 1400 !important;
+  isolation: isolate;
+}
+
 .rs-picker-popup,
 .rs-calendar,
 .rs-calendar-table {

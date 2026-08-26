@@ -8,8 +8,8 @@ import { colors } from "@/config/theme";
 import AppTooltip from "@/app/component/app-tooltip/AppTooltip";
 import AppIconButton from "@/app/component/app-icon-button/AppIconButton";
 import AppSheet from "@/app/component/app-sheet/AppSheet";
-import DateTimePicker from "@/app/component/date-time-picker/DateTimePicker";
-import { zoneCountHeatMap, productInteraction, retrieveDwellingTime } from "@/app/services/heatmap/heatmap";
+import DateTimePicker, { getTodayRange } from "@/app/component/date-time-picker/DateTimePicker";
+import { zoneCountHeatMap, productInteraction } from "@/app/services/heatmap/heatmap";
 import { getLayout } from "@/lib/layout";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
@@ -23,6 +23,49 @@ type ZoneSelection = { id: string | null; name: string | null };
 function formatDateAndTime(range: Date[] | null): string[] {
   if (!range || range.length < 2) return ["", ""];
   return [range[0].toISOString(), range[1].toISOString()];
+}
+
+function getTodayRangeISO(): [string, string] {
+  const [start, end] = getTodayRange();
+  return [start.toISOString(), end.toISOString()];
+}
+
+function formatDwellingTime(item: any): string {
+  if (!item) return "-";
+  const v =
+    item.dwelling_time ??
+    item.dwell_time ??
+    item.avg_dwelling_time ??
+    item.dwellingTime ??
+    item.dwellTime ??
+    item["DWELLING TIME"];
+  if (v === null || v === undefined || v === "") return "-";
+  return String(v);
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function isFabricAbort(reason: unknown): boolean {
+  return reason === "aborted" || (reason instanceof Error && reason.message === "aborted");
+}
+
+function isCanvasDisposed(canvas: fabric.Canvas | null | undefined): boolean {
+  return Boolean(canvas && ((canvas as any).disposed || (canvas as any).destroyed));
+}
+
+function wrapCanvasDispose(canvas: fabric.Canvas) {
+  const originalDispose = canvas.dispose.bind(canvas);
+  canvas.dispose = (() => {
+    try {
+      return Promise.resolve(originalDispose()).catch((reason: unknown) => {
+        if (isFabricAbort(reason)) return false;
+        throw reason;
+      });
+    } catch (reason) {
+      if (isFabricAbort(reason)) return Promise.resolve(false);
+      throw reason;
+    }
+  }) as typeof canvas.dispose;
 }
 
 function HeatmapLegend({
@@ -66,10 +109,20 @@ function HeatmapView({
   visible?: boolean;
 }) {
   const isProduct = mode === "product";
+  const isProductRef = useRef(isProduct);
+  isProductRef.current = isProduct;
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const overlayGenRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const { editor, onReady } = useFabricJSEditor();
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas) => {
+    wrapCanvasDispose(canvas);
+    onReady(canvas);
+  }, [onReady]);
   const [zoom, setZoom] = useState(1);
-  const [dateAndTime, setDateAndTime] = useState<string[]>([]);
+  const [dateAndTime, setDateAndTime] = useState<string[]>(() => getTodayRangeISO());
+  const hasCustomRangeRef = useRef(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<any>(null);
   const [selectedZone, setSelectedZone] = useState<ZoneSelection>({
@@ -80,14 +133,20 @@ function HeatmapView({
   const [heatMapData, setHeatMapData] = useState<any[]>([]);
   const heatMapDataRef = useRef<any[]>([]);
   const allAggregatedDataRef = useRef<any[]>([]);
-  const allZoneDataRef = useRef<any[]>([]);
-  const allDwellingDataRef = useRef<any[]>([]);
   const segmentWindowsRef = useRef<{ start: string; end: string }[]>([]);
   const layoutLoadedRef = useRef(false);
+  const layoutLoadGenRef = useRef(0);
+  const parsedLayoutRef = useRef<any>(null);
   const applyHeatmapRef = useRef<(data?: any[], opts?: { colors?: string[]; alpha?: number }) => void>(() => {});
   const fitCanvasRef = useRef<() => void>(() => {});
   const abortRef = useRef<AbortController | null>(null);
   const rangeRef = useRef<{ start: string; end: string } | null>(null);
+
+  const abortInFlight = (_reason: "new-range" | "unmount") => {
+    if (!abortRef.current) return;
+    abortRef.current.abort();
+    abortRef.current = null;
+  };
   const [heatmapRange, setHeatmapRange] = useState<{ min: number; max: number }>({
     min: 0,
     max: 0,
@@ -96,8 +155,6 @@ function HeatmapView({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeSegment, setActiveSegment] = useState<number | null>(null);
   const [segmentDataMap, setSegmentDataMap] = useState<Map<number, any[]>>(new Map());
-  const [segmentZoneDataMap, setSegmentZoneDataMap] = useState<Map<number, any[]>>(new Map());
-  const [segmentDwellingDataMap, setSegmentDwellingDataMap] = useState<Map<number, any[]>>(new Map());
   const [segmentIntensities, setSegmentIntensities] = useState<number[]>([]);
   const [segmentLabels, setSegmentLabels] = useState<string[]>([]);
   const [tooltip, setTooltip] = useState<{
@@ -117,11 +174,18 @@ function HeatmapView({
   });
 
   const getCountValue = (h: any) => {
-    const v = isProduct
+    const v = isProductRef.current
       ? h?.interaction_count ?? h?.interactionCount ?? h?.count ?? h?.value ?? h?.total ?? h?.sum
       : h?.visitor_count ?? h?.visitorCount ?? h?.count ?? h?.value ?? h?.total ?? h?.sum;
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : null;
+  };
+
+  const removeHeatmapDecorations = (canvas: fabric.Canvas) => {
+    const stale = canvas.getObjects().filter((o: any) =>
+      (o as any).isHeatmapOverlay || (o as any).isZoneLabelBg || (o as any).isZoneCountLabel
+    );
+    stale.forEach((o: any) => { try { canvas.remove(o); } catch { } });
   };
 
   const normalizeSource = (raw: any): any[] => {
@@ -157,17 +221,20 @@ function HeatmapView({
   };
 
   const applyHeatmap = useCallback((data?: any[], opts?: { colors?: string[]; alpha?: number }) => {
-    if (!editor?.canvas) return;
+    if (!editor?.canvas || isCanvasDisposed(editor.canvas)) return;
     const canvas = editor.canvas;
+    const gen = ++overlayGenRef.current;
     const palette = opts?.colors ?? HEATMAP_GRADIENT;
     const alpha = typeof opts?.alpha === "number" ? opts.alpha : 0.7;
     const sourceData = normalizeSource(data ?? heatMapDataRef.current);
-    if (!sourceData || sourceData.length === 0) return;
 
-    const existingOverlays = canvas.getObjects().filter((o: any) => o.isHeatmapOverlay);
-    existingOverlays.forEach((o: any) => {
-      try { canvas.remove(o); } catch { }
-    });
+    removeHeatmapDecorations(canvas);
+
+    if (!sourceData || sourceData.length === 0) {
+      setHeatmapRange({ min: 0, max: 0 });
+      canvas.requestRenderAll();
+      return;
+    }
 
     const floorplan = canvas.getObjects().find((o: any) => o.isLayout || o.type === "image");
     if (!floorplan) return;
@@ -326,6 +393,8 @@ function HeatmapView({
 
     const dataURL = heatmapCanvas.toDataURL("image/png");
     fabric.Image.fromURL(dataURL).then((heatmapImage: fabric.Image) => {
+      if (gen !== overlayGenRef.current) return;
+      if (!editor?.canvas || isCanvasDisposed(canvas)) return;
       heatmapImage.set({
         left: layoutLeft,
         top: layoutTop,
@@ -343,8 +412,11 @@ function HeatmapView({
         }
       });
       canvas.requestRenderAll();
-    }).catch((err) => console.error("Failed to create heatmap overlay:", err));
-  }, [editor]);
+    }).catch((err) => {
+      if (gen !== overlayGenRef.current || isFabricAbort(err) || isCanvasDisposed(canvas)) return;
+      console.error("Failed to create heatmap overlay:", err);
+    });
+  }, [editor, isProduct]);
   applyHeatmapRef.current = applyHeatmap;
 
   const setDottedGridBackground = () => {
@@ -443,8 +515,10 @@ function HeatmapView({
   }, [editor]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchLayout = async () => {
       const response = await getLayout();
+      if (cancelled) return;
       if (response.error) {
         console.warn("Failed to load layout:", response.error);
         return;
@@ -452,50 +526,65 @@ function HeatmapView({
       setLayout(response.data || null);
     };
     fetchLayout();
+    return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!editor?.canvas || !layout) return;
-    let layoutJson: any = null;
-    try {
-      if (Array.isArray(layout)) {
-        const item = (layout as any).find((l: any) => l && (l.layout_json || l.layout)) || layout[0];
-        layoutJson = item?.layout_json ?? item?.layout ?? item;
-      } else if (typeof layout === "object") {
-        layoutJson = (layout as any).layout_json ?? (layout as any).layout ?? layout;
-      } else {
-        layoutJson = layout;
+  const hydrateCanvasFromLayout = useCallback((force = false) => {
+    if (!editor?.canvas || !layout || isCanvasDisposed(editor.canvas)) return;
+    const canvas = editor.canvas;
+    const hasFloorplan = canvas.getObjects().some((o: any) => o.isLayout || o.type === "image");
+    if (hasFloorplan && !force && layoutLoadedRef.current) return;
+
+    let layoutJson: any = parsedLayoutRef.current;
+    if (!layoutJson) {
+      try {
+        if (Array.isArray(layout)) {
+          const item = (layout as any).find((l: any) => l && (l.layout_json || l.layout)) || layout[0];
+          layoutJson = item?.layout_json ?? item?.layout ?? item;
+        } else if (typeof layout === "object") {
+          layoutJson = (layout as any).layout_json ?? (layout as any).layout ?? layout;
+        } else {
+          layoutJson = layout;
+        }
+        if (typeof layoutJson === "string") layoutJson = JSON.parse(layoutJson);
+      } catch (e) {
+        console.error("Failed to parse layout JSON:", e);
+        return;
       }
-      if (typeof layoutJson === "string") layoutJson = JSON.parse(layoutJson);
-    } catch (e) {
-      console.error("Failed to parse layout JSON:", e);
-      return;
+      parsedLayoutRef.current = layoutJson;
     }
     if (!layoutJson) return;
 
+    const gen = ++layoutLoadGenRef.current;
+    layoutLoadedRef.current = false;
     try {
-      editor.canvas.clear();
+      canvas.clear();
       if (canvasRef.current) {
-        editor.canvas.setWidth(canvasRef.current.clientWidth);
-        editor.canvas.setHeight(canvasRef.current.clientHeight);
+        canvas.setWidth(canvasRef.current.clientWidth || canvas.getWidth());
+        canvas.setHeight(canvasRef.current.clientHeight || canvas.getHeight());
       }
-      editor.canvas.loadFromJSON(layoutJson).then(async () => {
+      canvas.loadFromJSON(layoutJson).then(() => {
+        if (gen !== layoutLoadGenRef.current) return;
+        if (isCanvasDisposed(canvas)) return;
         try { setDottedGridBackground(); } catch { }
-        const floor = editor.canvas.getObjects().find((o: any) => o.type === "image");
+        const floor = canvas.getObjects().find((o: any) => o.type === "image");
         if (floor) {
           (floor as any).isLayout = true;
           try {
             floor.selectable = false;
             floor.evented = false;
-            editor.canvas.sendObjectToBack(floor);
+            canvas.sendObjectToBack(floor);
           } catch { }
         }
-        editor.canvas.requestRenderAll();
+        canvas.requestRenderAll();
         layoutLoadedRef.current = true;
-        setTimeout(() => {
-          try { applyHeatmapRef.current(heatMapDataRef.current); } catch { }
+        try { applyHeatmapRef.current(heatMapDataRef.current); } catch { }
+        if (visibleRef.current) {
           try { fitCanvasRef.current(); } catch { }
-        }, 50);
+        }
+      }).catch((e: unknown) => {
+        if (gen !== layoutLoadGenRef.current || isFabricAbort(e) || isCanvasDisposed(canvas)) return;
+        console.error("Failed to load layout into canvas:", e);
       });
     } catch (e) {
       console.error("Failed to load layout into canvas:", e);
@@ -503,24 +592,26 @@ function HeatmapView({
   }, [editor?.canvas, layout]);
 
   useEffect(() => {
+    hydrateCanvasFromLayout();
+  }, [hydrateCanvasFromLayout]);
+
+  useEffect(() => {
     heatMapDataRef.current = heatMapData;
     if (!layoutLoadedRef.current) return;
     if (heatMapData.length > 0) {
       try { applyHeatmap(heatMapData); } catch { }
-    } else if (editor?.canvas) {
-      const canvas = editor.canvas;
-      const stale = canvas.getObjects().filter((o: any) =>
-        (o as any).isHeatmapOverlay || (o as any).isZoneLabelBg || (o as any).isZoneCountLabel
-      );
-      stale.forEach((o: any) => { try { canvas.remove(o); } catch { } });
-      canvas.requestRenderAll();
+    } else if (editor?.canvas && !isCanvasDisposed(editor.canvas)) {
+      overlayGenRef.current += 1;
+      removeHeatmapDecorations(editor.canvas);
+      editor.canvas.requestRenderAll();
     }
   }, [heatMapData, applyHeatmap, editor]);
 
   useEffect(() => {
-    if (!editor?.canvas) return;
+    if (!visible || !editor?.canvas) return;
     const canvas = editor.canvas;
     const handleMouseOver = (opt: any) => {
+      if (!visibleRef.current) return;
       const target = opt.target;
       if (!target) return;
       if (!isZoneObject(target)) return;
@@ -561,12 +652,13 @@ function HeatmapView({
       canvas.off("mouse:out", handleMouseOut);
       canvas.off("mouse:move", handleMouseMove);
     };
-  }, [editor, tooltip.visible]);
+  }, [editor, tooltip.visible, visible]);
 
   useEffect(() => {
-    if (!editor?.canvas) return;
+    if (!visible || !editor?.canvas) return;
     const canvas = editor.canvas;
     const handleWheel = function (opt: any) {
+      if (!visibleRef.current) return;
       const delta = opt.e.deltaY;
       if (opt.e.ctrlKey) {
         let z = canvas.getZoom();
@@ -580,10 +672,10 @@ function HeatmapView({
     };
     canvas.on("mouse:wheel", handleWheel);
     return () => canvas.off("mouse:wheel", handleWheel);
-  }, [editor]);
+  }, [editor, visible]);
 
   useEffect(() => {
-    if (!editor?.canvas) return;
+    if (!visible || !editor?.canvas) return;
     const canvas = editor.canvas;
     let spaceHeld = false;
     let isPanning = false;
@@ -591,6 +683,7 @@ function HeatmapView({
     let lastPanY = 0;
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!visibleRef.current) return;
       if (e.code === "Space" && !spaceHeld) {
         spaceHeld = true;
         canvas.defaultCursor = "grab";
@@ -657,12 +750,13 @@ function HeatmapView({
       canvas.off("mouse:move", onMouseMove);
       canvas.off("mouse:up", onMouseUp);
     };
-  }, [editor]);
+  }, [editor, visible]);
 
   useEffect(() => {
-    if (!editor?.canvas) return;
+    if (!visible || !editor?.canvas) return;
     const canvas = editor.canvas;
     const handleClick = (opt: any) => {
+      if (!visibleRef.current) return;
       try {
         const pointer = canvas.getPointer(opt.e);
         const p = new fabric.Point(pointer.x, pointer.y);
@@ -722,17 +816,15 @@ function HeatmapView({
     };
     canvas.on("mouse:down", handleClick);
     return () => canvas.off("mouse:down", handleClick);
-  }, [editor, heatMapData, isProduct]);
+  }, [editor, heatMapData, isProduct, visible]);
 
   const onchangeDateAndTiem = (date: Date[] | null) => {
     const isoDates = formatDateAndTime(date);
     setDateAndTime(isoDates);
   };
 
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-  const fetchTimelineData = async (startDateISO: string, endDateISO: string) => {
-    abortRef.current?.abort();
+  const fetchTimelineData = useCallback(async (startDateISO: string, endDateISO: string) => {
+    abortInFlight("new-range");
     const controller = new AbortController();
     abortRef.current = controller;
     const { signal } = controller;
@@ -742,8 +834,6 @@ function HeatmapView({
       setLoading(true);
       setActiveSegment(null);
       setSegmentDataMap(new Map());
-      setSegmentZoneDataMap(new Map());
-      setSegmentDwellingDataMap(new Map());
       setSegmentIntensities([]);
       setSegmentLabels([]);
       segmentWindowsRef.current = [];
@@ -775,13 +865,15 @@ function HeatmapView({
         }
       }
 
+      if (signal.aborted) return;
       segmentWindowsRef.current = windows.map(({ start: s, end: e }) => ({ start: s, end: e }));
       setSegmentLabels(windows.map((w) => w.label));
       setSegmentIntensities(new Array(windows.length).fill(0));
 
       const siteID = getSiteId();
+      const productMode = isProductRef.current;
 
-      if (isProduct) {
+      if (productMode) {
         const productResp = await productInteraction({
           siteId: siteID,
           startDate: startDateISO,
@@ -793,11 +885,6 @@ function HeatmapView({
         allAggregatedDataRef.current = primaryData;
         heatMapDataRef.current = primaryData;
         setHeatMapData(primaryData);
-        setLoading(false);
-        zoneCountHeatMap({ siteId: siteID, startDate: startDateISO, endDate: endDateISO, signal }).then((zoneResp) => {
-          if (signal.aborted) return;
-          allZoneDataRef.current = zoneResp.data || [];
-        });
       } else {
         const zoneResp = await zoneCountHeatMap({
           siteId: siteID,
@@ -807,25 +894,22 @@ function HeatmapView({
         });
         if (signal.aborted) return;
         const zoneData = zoneResp.data || [];
-        allZoneDataRef.current = zoneData;
         allAggregatedDataRef.current = zoneData;
         heatMapDataRef.current = zoneData;
         setHeatMapData(zoneData);
-        setLoading(false);
-        retrieveDwellingTime({ siteId: siteID, startDate: startDateISO, endDate: endDateISO, signal }).then((dwellResp) => {
-          if (signal.aborted) return;
-          allDwellingDataRef.current = dwellResp.data || [];
-        });
       }
     } finally {
       if (!signal.aborted) setLoading(false);
     }
-  };
+  }, []);
 
   const handleDateSubmit = () => {
-    if (dateAndTime[0] && dateAndTime[1]) {
-      fetchTimelineData(dateAndTime[0], dateAndTime[1]);
-    }
+    const [startISO, endISO] = dateAndTime[0] && dateAndTime[1]
+      ? [dateAndTime[0], dateAndTime[1]]
+      : getTodayRangeISO();
+    hasCustomRangeRef.current = true;
+    setDateAndTime([startISO, endISO]);
+    fetchTimelineData(startISO, endISO);
   };
 
   const handleSegmentChange = useCallback(async (index: number) => {
@@ -841,13 +925,14 @@ function HeatmapView({
     const window = segmentWindowsRef.current[index];
     if (!window) return;
 
-    abortRef.current?.abort();
+    abortInFlight("new-range");
     const controller = new AbortController();
     abortRef.current = controller;
     const { signal } = controller;
     const siteID = getSiteId();
+    const productMode = isProductRef.current;
 
-    if (isProduct) {
+    if (productMode) {
       const productResp = await productInteraction({
         siteId: siteID,
         startDate: window.start,
@@ -872,15 +957,6 @@ function HeatmapView({
       });
       heatMapDataRef.current = primaryData;
       setHeatMapData(primaryData);
-      zoneCountHeatMap({ siteId: siteID, startDate: window.start, endDate: window.end, signal }).then((zoneResp) => {
-        if (signal.aborted) return;
-        const zoneData = (!zoneResp.error && zoneResp.data) ? zoneResp.data : [];
-        setSegmentZoneDataMap((prev) => {
-          const next = new Map(prev);
-          next.set(index, zoneData);
-          return next;
-        });
-      });
       return;
     }
 
@@ -897,11 +973,6 @@ function HeatmapView({
       next.set(index, zoneData);
       return next;
     });
-    setSegmentZoneDataMap((prev) => {
-      const next = new Map(prev);
-      next.set(index, zoneData);
-      return next;
-    });
     const total = zoneData.reduce((sum: number, item: any) => {
       const v = getCountValue(item);
       return sum + (v ?? 0);
@@ -913,16 +984,7 @@ function HeatmapView({
     });
     heatMapDataRef.current = zoneData;
     setHeatMapData(zoneData);
-    retrieveDwellingTime({ siteId: siteID, startDate: window.start, endDate: window.end, signal }).then((dwellResp) => {
-      if (signal.aborted) return;
-      const dwellData = (!dwellResp.error && dwellResp.data) ? dwellResp.data : [];
-      setSegmentDwellingDataMap((prev) => {
-        const next = new Map(prev);
-        next.set(index, dwellData);
-        return next;
-      });
-    });
-  }, [segmentDataMap, isProduct]);
+  }, [segmentDataMap]);
 
   const handleShowAll = useCallback(() => {
     setActiveSegment(null);
@@ -932,31 +994,56 @@ function HeatmapView({
   }, []);
 
   useEffect(() => {
-    if (rangeRef.current) {
-      fetchTimelineData(rangeRef.current.start, rangeRef.current.end);
-    } else {
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const endOfToday = new Date(startOfToday.getTime() + 86400000 - 1);
-      fetchTimelineData(startOfToday.toISOString(), endOfToday.toISOString());
-    }
+    if (!visible) return;
+    if (hasCustomRangeRef.current && rangeRef.current) return;
+    const [startISO, endISO] = getTodayRangeISO();
+    setDateAndTime([startISO, endISO]);
+    fetchTimelineData(startISO, endISO);
+    // Fetch today's overlay as soon as this tab is shown. Do not abort on hide —
+    // keep-alive tab switches must not cancel the in-flight request.
+  }, [visible, fetchTimelineData]);
+
+  useEffect(() => {
+    if (visible) return;
+    setIsDrawerOpen(false);
+    setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+  }, [visible]);
+
+  useEffect(() => {
     return () => {
-      abortRef.current?.abort();
+      overlayGenRef.current += 1;
+      layoutLoadGenRef.current += 1;
+      abortInFlight("unmount");
     };
-    // Refetch overlay metrics when switching zone ↔ product without remounting the canvas
+    // Unmount/Strict Mode/Fast Refresh cleanup only. Do not abort when the canvas identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProduct]);
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (layout) return;
+    let cancelled = false;
+    getLayout().then((response) => {
+      if (cancelled || response.error) return;
+      setLayout(response.data || null);
+    });
+    return () => { cancelled = true; };
+  }, [visible, layout]);
 
   useEffect(() => {
     if (!visible || !editor?.canvas || !canvasRef.current) return;
     editor.canvas.setWidth(canvasRef.current.clientWidth);
     editor.canvas.setHeight(canvasRef.current.clientHeight);
     editor.canvas.requestRenderAll();
+    const missingFloorplan = !editor.canvas.getObjects().some((o: any) => o.isLayout || o.type === "image");
+    if (layout && missingFloorplan) {
+      hydrateCanvasFromLayout(true);
+    }
     const id = requestAnimationFrame(() => {
       try { fitCanvasRef.current(); } catch { }
     });
     return () => cancelAnimationFrame(id);
-  }, [visible, editor]);
+  }, [visible, editor?.canvas, layout, hydrateCanvasFromLayout]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
@@ -969,7 +1056,15 @@ function HeatmapView({
         </div>
       )}
       <div className="flex-none w-full grid place-content-end py-1">
-        <DateTimePicker onchange={onchangeDateAndTiem} onsubmit={handleDateSubmit} />
+        <DateTimePicker
+          value={
+            dateAndTime[0] && dateAndTime[1]
+              ? [new Date(dateAndTime[0]), new Date(dateAndTime[1])]
+              : null
+          }
+          onchange={onchangeDateAndTiem}
+          onsubmit={handleDateSubmit}
+        />
       </div>
       <div className="mt-2 mb-3">
         <TimelinePlaybackBar
@@ -1073,7 +1168,7 @@ function HeatmapView({
         })()}
         <FabricJSCanvas
           className="sample-canvas border border-gray-300 rounded-md h-full w-full"
-          onReady={onReady}
+          onReady={handleCanvasReady}
         />
         <HeatmapLegend
           min={heatmapRange.min}
@@ -1165,75 +1260,6 @@ function HeatmapView({
           ) : isProduct && Array.isArray(selectedZoneData) ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {selectedZoneData.map((p: any, idx: number) => {
-                // Find the zone data from allZoneDataRef or segmentZoneDataMap to get demographics
-                const currentZoneDataArr = activeSegment !== null ? (segmentZoneDataMap.get(activeSegment) || []) : allZoneDataRef.current;
-                const zidNum = selectedZone.id ? Number(selectedZone.id) : null;
-                const zoneMatch = currentZoneDataArr.find((z: any) => {
-                  const pz = z?.zone_id ?? z?.zoneId ?? z?.id ?? null;
-                  return pz !== null && Number(pz) === zidNum;
-                });
-
-                let demographics: any = {};
-                if (zoneMatch?.demographics && typeof zoneMatch.demographics === "object") demographics = zoneMatch.demographics;
-                else if (zoneMatch?.demo && typeof zoneMatch.demo === "object") demographics = zoneMatch.demo;
-                else if (typeof zoneMatch?.demographics === "string") {
-                  try { demographics = JSON.parse(zoneMatch.demographics); } catch { }
-                }
-
-                // Fallback to product demographics if zone is empty
-                if (Object.keys(demographics).length === 0) {
-                  if (p.demographics && typeof p.demographics === "object") demographics = p.demographics;
-                  else if (p.demo && typeof p.demo === "object") demographics = p.demo;
-                  else if (typeof p.demographics === "string") {
-                    try { demographics = JSON.parse(p.demographics); } catch { }
-                  }
-                }
-
-                // The API can return exact strings like "AGE Category" or "Gender" at the root level of demographics.
-                let ageObj = demographics?.["AGE Category"] ?? demographics?.ageCategory ?? demographics?.age ?? demographics?.["Age Category"] ?? {};
-                let genderObj = demographics?.["Gender"] ?? demographics?.gender ?? {};
-
-                // If it's totally empty but the root object has them (flattened API response)
-                if (Object.keys(ageObj).length === 0 && (zoneMatch?.["AGE Category"] || zoneMatch?.ageCategory || p["AGE Category"] || p.ageCategory)) {
-                  ageObj = zoneMatch?.["AGE Category"] ?? zoneMatch?.ageCategory ?? p["AGE Category"] ?? p.ageCategory;
-                }
-                if (Object.keys(genderObj).length === 0 && (zoneMatch?.["Gender"] || zoneMatch?.gender || p["Gender"] || p.gender)) {
-                  genderObj = zoneMatch?.["Gender"] ?? zoneMatch?.gender ?? p["Gender"] ?? p.gender;
-                }
-
-                const renderBreakdown = (obj: any) => {
-                  try {
-                    const keys = Object.keys(obj || {});
-                    if (!keys || keys.length === 0)
-                      return (
-                        <span className="text-xs" style={{ color: colors.textMuted }}>
-                          -
-                        </span>
-                      );
-                    return (
-                      <div className="flex gap-2 flex-wrap text-xs" style={{ color: colors.textMuted }}>
-                        {keys.map((k) => (
-                          <div
-                            key={k}
-                            className="px-2 py-0.5 rounded"
-                            style={{ backgroundColor: colors.background, border: `1px solid ${colors.border}` }}
-                          >
-                            <span className="font-medium" style={{ color: colors.text }}>
-                              {k}:
-                            </span>{" "}
-                            {obj[k]}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  } catch {
-                    return (
-                      <span className="text-xs" style={{ color: colors.textMuted }}>
-                        -
-                      </span>
-                    );
-                  }
-                };
                 return (
                   <div
                     key={idx}
@@ -1263,20 +1289,6 @@ function HeatmapView({
                       <div className="col-span-2 flex flex-col justify-center items-center rounded-lg p-2" style={{ backgroundColor: `${accent}15` }}>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Interactions</div>
                         <div className="text-3xl font-black mt-1" style={{ color: accent }}>{p.interaction_count ?? "-"}</div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Split: Demographics (Span Full Width - ALWAYS VISIBLE) */}
-                    <div className="mt-4 pt-4 border-t border-dashed" style={{ borderColor: colors.border }}>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Age Category</div>
-                          {renderBreakdown(ageObj)}
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase font-bold mb-1 tracking-wider" style={{ color: colors.textMuted }}>Gender</div>
-                          {renderBreakdown(genderObj)}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -1355,14 +1367,19 @@ function HeatmapView({
                           <div className="text-3xl font-black mt-1" style={{ color: accent }}>{zData.visitor_count ?? "-"}</div>
                         </div>
                         {(() => {
-                          const currentDwellDataArr = activeSegment !== null ? (segmentDwellingDataMap.get(activeSegment) || []) : allDwellingDataRef.current;
+                          const zoneId = zData.zone_id ?? selectedZone.id;
                           const zoneName = zData.zone_name ?? selectedZone.name;
-                          const dwellMatch = currentDwellDataArr.find((d: any) => d["ZONE NAME"] === zoneName || d.zone_name === zoneName);
-                          const dwellingTimeStr = dwellMatch?.["DWELLING TIME"] ?? dwellMatch?.dwelling_time ?? "-";
+                          const src = activeSegment !== null
+                            ? (segmentDataMap.get(activeSegment) ?? [])
+                            : allAggregatedDataRef.current;
+                          const liveZone = (Array.isArray(src) ? src : []).find((d: any) =>
+                            (zoneId !== null && zoneId !== undefined && String(d.zone_id) === String(zoneId)) ||
+                            (zoneName && (d.zone_name === zoneName || d["ZONE NAME"] === zoneName))
+                          ) ?? zData;
                           return (
                             <div className="flex flex-col justify-center items-center rounded-lg p-2 flex-1" style={{ backgroundColor: `${accent}15` }}>
                               <div className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: accent }}>Dwelling Time</div>
-                              <div className="text-xl font-black mt-1" style={{ color: accent }}>{dwellingTimeStr}</div>
+                              <div className="text-xl font-black mt-1" style={{ color: accent }}>{formatDwellingTime(liveZone)}</div>
                             </div>
                           );
                         })()}

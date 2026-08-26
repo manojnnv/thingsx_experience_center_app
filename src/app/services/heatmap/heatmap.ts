@@ -8,6 +8,8 @@ export interface ZoneHeatmapData {
   zone_id: number | string;
   zone_name?: string;
   count?: number;
+  visitor_count?: number;
+  dwelling_time?: string | number;
   demographics?: Record<string, Record<string, number>>;
 }
 
