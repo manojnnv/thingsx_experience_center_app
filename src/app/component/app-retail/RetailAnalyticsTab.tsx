@@ -40,7 +40,10 @@ function formatDwellingTime(item: any): string {
     item.dwellTime ??
     item["DWELLING TIME"];
   if (v === null || v === undefined || v === "") return "-";
-  return String(v);
+  const text = String(v).trim();
+  if (!text) return "-";
+  if (/\b(sec|secs|second|seconds|s)\b/i.test(text)) return text;
+  return `${text} sec`;
 }
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -183,7 +186,7 @@ function HeatmapView({
 
   const removeHeatmapDecorations = (canvas: fabric.Canvas) => {
     const stale = canvas.getObjects().filter((o: any) =>
-      (o as any).isHeatmapOverlay || (o as any).isZoneLabelBg || (o as any).isZoneCountLabel
+      (o as any).isHeatmapOverlay || (o as any).isZoneLabelBg || (o as any).isZoneCountLabel || (o as any).isZoneNameLabel
     );
     stale.forEach((o: any) => { try { canvas.remove(o); } catch { } });
   };
@@ -210,6 +213,23 @@ function HeatmapView({
     return obj.zoneName ?? obj.zone_name ?? obj.labelText ?? obj.name ?? `Zone ${getZoneId(obj)}`;
   };
 
+  const hideEmbeddedZoneNameTexts = (obj: any) => {
+    if (obj.type !== "group" || typeof obj.getObjects !== "function") return;
+    obj.getObjects().forEach((c: any) => {
+      if (c.type !== "text" && c.type !== "i-text" && c.type !== "textbox") return;
+      if ((c as any).isZoneCountLabel || (c as any).isZoneNameLabel) return;
+      c.set({ opacity: 0, selectable: false, evented: false });
+    });
+  };
+
+  const bringZoneLabelsToFront = (canvas: fabric.Canvas) => {
+    canvas.getObjects().forEach((obj: any) => {
+      if ((obj as any).isZoneNameLabel || (obj as any).isZoneLabelBg || (obj as any).isZoneCountLabel) {
+        try { canvas.bringObjectToFront(obj); } catch { }
+      }
+    });
+  };
+
   const hexToRgb = (hex: string) => {
     const h = hex.replace("#", "");
     const bigint = parseInt(h, 16);
@@ -230,8 +250,40 @@ function HeatmapView({
 
     removeHeatmapDecorations(canvas);
 
+    const addReadableZoneName = (obj: any, centerX: number, centerY: number) => {
+      hideEmbeddedZoneNameTexts(obj);
+      const name = getZoneName(obj);
+      if (!name) return;
+      const NAME_FONT_SIZE = 22;
+      const nameLbl = new fabric.Text(name, {
+        left: centerX,
+        top: centerY - 22,
+        originX: "center",
+        originY: "bottom",
+        fontSize: NAME_FONT_SIZE,
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        fontWeight: "700",
+        fill: "#111827",
+        stroke: "#ffffff",
+        strokeWidth: 5,
+        paintFirst: "stroke",
+        selectable: false,
+        evented: false,
+      });
+      (nameLbl as any).isZoneNameLabel = true;
+      canvas.add(nameLbl);
+    };
+
     if (!sourceData || sourceData.length === 0) {
       setHeatmapRange({ min: 0, max: 0 });
+      canvas.getObjects().forEach((obj: any) => {
+        try {
+          if (!isZoneObject(obj)) return;
+          const bounds = obj.getBoundingRect(true);
+          addReadableZoneName(obj, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        } catch { }
+      });
+      bringZoneLabelsToFront(canvas);
       canvas.requestRenderAll();
       return;
     }
@@ -357,6 +409,8 @@ function HeatmapView({
         (lbl as any).isZoneCountLabel = true;
         canvas.add(lbl);
         (obj as any).zoneCountLabel = lbl;
+
+        addReadableZoneName(obj, centerX, centerY);
       } catch { }
     });
 
@@ -407,7 +461,7 @@ function HeatmapView({
       canvas.sendObjectToBack(heatmapImage);
       if (floorplan) canvas.sendObjectToBack(floorplan);
       canvas.getObjects().forEach((obj: any) => {
-        if ((obj as any).isZoneLabelBg || (obj as any).isZoneCountLabel) {
+        if ((obj as any).isZoneNameLabel || (obj as any).isZoneLabelBg || (obj as any).isZoneCountLabel) {
           try { canvas.bringObjectToFront(obj); } catch { }
         }
       });

@@ -242,11 +242,13 @@ function SensorsPageContent() {
     const doPollContent = async () => {
       // Abort any previous in-flight request to prevent overlapping responses
       if (abortController) abortController.abort();
-      abortController = new AbortController();
+      const controller = new AbortController();
+      abortController = controller;
 
       const tins = pollTinsRef.current;
-      const result = await fetchLatestSensorData(tins, abortController.signal);
-      if (cancelled || result.error || !result.data) return;
+      const result = await fetchLatestSensorData(tins, controller.signal);
+      if (cancelled || controller.signal.aborted || abortController !== controller) return;
+      if (result.error || !result.data) return;
 
       const payload = result.data;
       const now = Date.now();
@@ -459,12 +461,11 @@ function SensorsPageContent() {
       });
     };
 
-    const poll = async () => {
-      await doPollContent();
-      if (!cancelled) {
-        const interval = document.visibilityState === "visible" ? ACTIVE_POLL_INTERVAL_MS : INACTIVE_POLL_INTERVAL_MS;
-        timeoutId = setTimeout(poll, interval);
-      }
+    const poll = () => {
+      if (cancelled) return;
+      const interval = document.visibilityState === "visible" ? ACTIVE_POLL_INTERVAL_MS : INACTIVE_POLL_INTERVAL_MS;
+      timeoutId = setTimeout(poll, interval);
+      void doPollContent();
     };
 
     // Initial poll immediately
