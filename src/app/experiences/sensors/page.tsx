@@ -37,7 +37,7 @@ import { ExperienceErrorBoundary } from "@/app/component/ExperienceErrorBoundary
 const ACTIVE_POLL_INTERVAL_MS = 4000; // Poll live data every 4 seconds when active
 const INACTIVE_POLL_INTERVAL_MS = 10000; // Poll live data every 10 seconds when backgrounded
 const STALE_THRESHOLD_MS = 300000; // Sensor considered inactive if no data in 5 minutes
-const MISS_THRESHOLD = 5; // Remove sensor after 5 consecutive empty polls (~20s)
+const MISS_THRESHOLD = 7; // Remove sensor after 6 consecutive empty polls (~28s)
 
 const TABS = {
   grid: "Component Matrix",
