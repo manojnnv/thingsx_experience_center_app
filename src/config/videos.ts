@@ -29,27 +29,37 @@ export const VIDEO_LIBRARY: VideoEntry[] = [
   },
   {
     id: "demo-5",
-    title: "People Tracking Video",
+    title: "People Tracking",
     url: "http://thingsx.home:8080/Demo_videos/cam_entry.mp4",
   },
   {
     id: "demo-6",
-    title: "People Tracking Video packaged food zone",
+    title: "People Tracking packaged food zone",
     url: "http://thingsx.home:8080/Demo_videos/retail_2.mp4",
   },
   {
     id: "demo-7",
-    title: "Product Interaction Video packaged food zone",
+    title: "Product Interaction packaged food zone",
     url: "http://thingsx.home:8080/Demo_videos/retail_3.mp4",
   },
   {
     id: "demo-8",
-    title: "Product Interaction Video Daily Essentials zone",
+    title: "Product Interaction Daily Essentials zone",
     url: "http://thingsx.home:8080/Demo_videos/retail_4.mp4",
   },
   {
     id: "demo-9",
-    title: "People Tracking Video Daily Essentials zone and household zone",
+    title: "People Tracking Daily Essentials zone and household zone",
     url: "http://thingsx.home:8080/Demo_videos/retail_5.mp4",
+  },
+  {
+    id: "demo-10",
+    title: "ThingsX Retail ComputerVision Demo-1",
+    url: "http://thingsx.home:8080/Demo_videos/ThingsX_Retail_V1.mp4",
+  },
+  {
+    id: "demo-11",
+    title: "Food Grader Video",
+    url: "http://thingsx.home:8080/Demo_videos/produce_inspection_07_26.mp4",
   },
 ]; 
