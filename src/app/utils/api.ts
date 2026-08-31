@@ -62,14 +62,17 @@ export const clearTokens = () => {
   delete api.defaults.headers.common["Authorization"];
 };
 
-export const handleLogout = () => {
+export const handleLogout = async (): Promise<boolean> => {
   clearTokens();
   // For this kiosk-style app, silently re-authenticate instead of redirecting
   // to the landing page. Dynamic import avoids circular dependency with auth.ts.
-  if (typeof window !== "undefined") {
-    import("@/app/services/auth/auth").then(({ login }) => login()).catch(() => {
-      console.error("❌ Silent re-login failed after token refresh failure");
-    });
+  if (typeof window === "undefined") return false;
+  try {
+    const { login } = await import("@/app/services/auth/auth");
+    return await login();
+  } catch {
+    console.error("❌ Silent re-login failed after token refresh failure");
+    return false;
   }
 };
 
@@ -147,11 +150,41 @@ api.interceptors.response.use(
 
       isRefreshing = true;
 
+      const retryAll = (token: string) => {
+        failedQueue.forEach((prom) => {
+          prom.originalRequest.headers = {
+            ...(prom.originalRequest.headers || {}),
+            Authorization: `Bearer ${token}`,
+          };
+          prom.resolve(api(prom.originalRequest));
+        });
+        failedQueue = [];
+        originalRequest.headers = {
+          ...(originalRequest.headers || {}),
+          Authorization: `Bearer ${token}`,
+        };
+        return api(originalRequest);
+      };
+
+      const reloginAndRetry = async (reason: string) => {
+        localStorage.setItem("reasonLogout", reason);
+        const loggedIn = await handleLogout();
+        if (loggedIn && accessToken) return retryAll(accessToken);
+        failedQueue.forEach((prom) => prom.reject(error));
+        failedQueue = [];
+        return Promise.reject(error);
+      };
+
       try {
-        const refreshPayload = refreshToken ? { refresh: refreshToken } : {};
+        // Cookie-only refresh (`{}`) 400s when there is no session (e.g. localhost
+        // without a login). Skip the POST and re-authenticate instead.
+        if (!refreshToken) {
+          return await reloginAndRetry("access token expired");
+        }
+
         const refreshResponse = await axios.post(
           `${API_BASE_URL}/v1/user/token-refresh`,
-          refreshPayload,
+          { refresh: refreshToken },
           { withCredentials: true }
         );
 
@@ -165,40 +198,16 @@ api.interceptors.response.use(
           refreshResponse.data?.refresh_token;
 
         if (!newAccessToken) {
-          localStorage.setItem("reasonLogout", "access token expired");
-          handleLogout();
-          return Promise.reject(error);
+          return await reloginAndRetry("access token expired");
         }
 
         setAccessToken(newAccessToken);
         if (newRefreshToken) setRefreshToken(newRefreshToken);
-
-        // Retry queued requests
-        failedQueue.forEach((prom) => {
-          prom.originalRequest.headers = {
-            ...(prom.originalRequest.headers || {}),
-            Authorization: `Bearer ${newAccessToken}`,
-          };
-          prom.resolve(api(prom.originalRequest));
-        });
-        failedQueue = [];
-
-        // Retry original request
-        originalRequest.headers = {
-          ...(originalRequest.headers || {}),
-          Authorization: `Bearer ${newAccessToken}`,
-        };
-        return api(originalRequest);
+        return retryAll(newAccessToken);
       } catch (refreshError) {
         const safeError = serializeAxiosError(refreshError);
         localStorage.setItem("last_refresh_error", JSON.stringify(safeError));
-        localStorage.setItem("reasonLogout", "token refresh failed");
-
-        failedQueue.forEach((prom) => prom.reject(refreshError));
-        failedQueue = [];
-
-        handleLogout();
-        return Promise.reject(refreshError);
+        return await reloginAndRetry("token refresh failed");
       } finally {
         isRefreshing = false;
       }

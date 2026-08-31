@@ -10,6 +10,44 @@ import type { DisplayDevice, SensorLiveData } from "./types";
 // NOTE: Stale-threshold cleanup is now handled by the poller in page.tsx.
 // This component is purely data-driven — if a TIN is in connectedSensors, it's active.
 const HIDDEN_CATEGORIES = new Set(["load_cell", "addressable_rgb"]);
+const TOPOLOGY_CX = 50;
+const TOPOLOGY_CY = 50;
+const SENSOR_NODE_R = 5.5;
+const SENSOR_ORBIT_R = 30;
+const LABEL_LINE_H = 3.8;
+const LABEL_GAP = 2.2;
+// Padding around the original 100×100 canvas so outside labels stay visible
+// without shrinking the graph so much that the lines look stacked.
+const TOPOLOGY_VIEWBOX = "-12 -8 124 118";
+
+type LabelSide = "left" | "right" | "top" | "bottom";
+
+function labelSideForPosition(x: number, y: number): LabelSide {
+  const dx = x - TOPOLOGY_CX;
+  const dy = y - TOPOLOGY_CY;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+  return dy >= 0 ? "bottom" : "top";
+}
+
+function labelAnchor(side: LabelSide): "start" | "middle" | "end" {
+  if (side === "left") return "end";
+  if (side === "right") return "start";
+  return "middle";
+}
+
+function labelOrigin(x: number, y: number, side: LabelSide, lineCount: number) {
+  const blockH = Math.max(0, lineCount - 1) * LABEL_LINE_H;
+  if (side === "right") {
+    return { x: x + SENSOR_NODE_R + LABEL_GAP, y: y - blockH / 2 + 1 };
+  }
+  if (side === "left") {
+    return { x: x - SENSOR_NODE_R - LABEL_GAP, y: y - blockH / 2 + 1 };
+  }
+  if (side === "top") {
+    return { x, y: y - SENSOR_NODE_R - LABEL_GAP - blockH };
+  }
+  return { x, y: y + SENSOR_NODE_R + LABEL_GAP + 2.4 };
+}
 
 // ─── Memoized Sensor Node (SVG) ────────────────────────────────────────
 interface MemoizedSensorNodeProps {
@@ -22,7 +60,6 @@ interface MemoizedSensorNodeProps {
 
 const MemoizedSensorNode = React.memo(
   ({ sensorPos, sensorData, device, onSelectDevice, displayOpts }: MemoizedSensorNodeProps) => {
-    const r = 5.5; // sensor circle radius
     const iconSize = 7; // logo size inside circle
 
     const fields = sensorData.fields ?? device?.fields;
@@ -48,13 +85,19 @@ const MemoizedSensorNode = React.memo(
             .join("\n")
         : displayValue != null ? `${displayValue.toFixed(1)} ${sensorData.unit}` : "—";
 
+    const valueLineCount = showFieldLabels ? Math.max(fieldKeys.length, 1) : 1;
+    const lineCount = 1 + valueLineCount;
+    const side = labelSideForPosition(sensorPos.x, sensorPos.y);
+    const textAnchor = labelAnchor(side);
+    const origin = labelOrigin(sensorPos.x, sensorPos.y, side, lineCount);
+
     return (
       <g
         className="cursor-pointer"
         onClick={() => device && onSelectDevice(device)}
       >
         <title>{sensorData.displayName}{"\n"}{allFieldsTooltip}</title>
-        <circle cx={sensorPos.x} cy={sensorPos.y} r={r} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
+        <circle cx={sensorPos.x} cy={sensorPos.y} r={SENSOR_NODE_R} fill={colors.backgroundCard} stroke={colors.primary} strokeWidth="0.4" />
         {device?.icon ? (
           <image
             href={device.icon}
@@ -68,34 +111,26 @@ const MemoizedSensorNode = React.memo(
         ) : (
           <circle cx={sensorPos.x} cy={sensorPos.y} r="2" fill={colors.primary} />
         )}
+        <text x={origin.x} y={origin.y} textAnchor={textAnchor} fill={colors.textMuted} fontSize="2.6">
+          {sensorData.displayName}
+        </text>
         {showFieldLabels ? (
-          <>
-            <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
-              {sensorData.displayName}
-            </text>
-            {fieldKeys.map((k, i) => {
-              const v = fields![k]?.value ?? device?.fields?.[k]?.value;
-              const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
-              const mvFields = multiValueSensorFields[sensorData.category];
-              const fieldDef = mvFields?.find(f => f.key === k);
-              const label = fieldDef?.label ?? k.replace(/_/g, " ");
-              const y = sensorPos.y + r + 7.8 + i * 3.4;
-              return (
-                <text key={k} x={sensorPos.x} y={y} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-                  {label}: {safe != null ? safe.toFixed(1) : "—"}
-                </text>
-              );
-            })}
-          </>
+          fieldKeys.map((k, i) => {
+            const v = fields![k]?.value ?? device?.fields?.[k]?.value;
+            const safe = v != null ? sanitizeSensorValue(Number(v) || 0, { ...displayOpts, metric: k }) : null;
+            const mvFields = multiValueSensorFields[sensorData.category];
+            const fieldDef = mvFields?.find(f => f.key === k);
+            const label = fieldDef?.label ?? k.replace(/_/g, " ");
+            return (
+              <text key={k} x={origin.x} y={origin.y + (i + 1) * LABEL_LINE_H} textAnchor={textAnchor} fill={colors.yellow} fontSize="3.2">
+                {label}: {safe != null ? safe.toFixed(1) : "—"}
+              </text>
+            );
+          })
         ) : (
-          <>
-            <text x={sensorPos.x} y={sensorPos.y + r + 4.5} textAnchor="middle" fill={colors.textMuted} fontSize="2.6">
-              {sensorData.displayName}
-            </text>
-            <text x={sensorPos.x} y={sensorPos.y + r + 7.5} textAnchor="middle" fill={colors.yellow} fontSize="3.2">
-              {displayValue != null ? `${displayValue.toFixed(1)}${sensorData.unit}` : "—"}
-            </text>
-          </>
+          <text x={origin.x} y={origin.y + LABEL_LINE_H} textAnchor={textAnchor} fill={colors.yellow} fontSize="3.2">
+            {displayValue != null ? `${displayValue.toFixed(1)}${sensorData.unit}` : "—"}
+          </text>
         )}
       </g>
     );
@@ -105,7 +140,9 @@ const MemoizedSensorNode = React.memo(
     // unchanged SensorLiveData entries, so === is the correct check.
     return prev.sensorData === next.sensorData &&
            prev.device === next.device &&
-           prev.onSelectDevice === next.onSelectDevice;
+           prev.onSelectDevice === next.onSelectDevice &&
+           prev.sensorPos.x === next.sensorPos.x &&
+           prev.sensorPos.y === next.sensorPos.y;
   }
 );
 
@@ -287,47 +324,38 @@ function SensorsTopologyInner({
 
   const activeSensorCount = activeSensors.length;
 
-  // Fixed positions for EVERY configured device — layout never shifts.
-  // Only recomputes when the device list itself changes.
-  // Multi-field sensors are interleaved among normals and pushed to a wider
-  // orbit so their taller label blocks don't overlap neighbours.
+  // Layout the sensors that are actually drawn. Previous versions parked every
+  // configured device on a tight ring, so two live neighbours (e.g. BME680 next
+  // to MQ6) stacked their labels even when the rest of the ring was empty.
+  // Keyed by active TIN set so value-only poll updates do not reshuffle nodes.
+  const activeTinKey = React.useMemo(
+    () =>
+      devices
+        .filter((d) => {
+          const sensor = connectedSensors.get(d.tin);
+          return !!sensor && isVisibleSensor(sensor);
+        })
+        .map((d) => d.tin)
+        .join(","),
+    [devices, connectedSensors, isVisibleSensor]
+  );
+
   const sensorPositions = React.useMemo(
     () => {
-      const multiFieldTins = new Set(
-        devices
-          .filter((d) => {
-            const mvFields = multiValueSensorFields[d.category];
-            return mvFields && mvFields.length > 1;
-          })
-          .map((d) => d.tin)
-      );
-      const normal: typeof devices = [];
-      const multi: typeof devices = [];
-      devices.forEach((d) => (multiFieldTins.has(d.tin) ? multi : normal).push(d));
+      const tins = activeTinKey ? activeTinKey.split(",") : [];
+      const count = tins.length;
+      if (count === 0) return [];
 
-      // Insert multi-field sensors near the TOP of the circle (upper-right)
-      // so their taller label blocks extend downward into open space and
-      // don't get clipped at the bottom of the viewBox.
-      // Index 0 = 12 o'clock; low indices = upper-right area.
-      const interleaved: typeof devices = [...normal];
-      multi.forEach((m, idx) => {
-        const insertAt = Math.min(1 + idx * 4, interleaved.length);
-        interleaved.splice(insertAt, 0, m);
-      });
-
-      return interleaved.map((device, i) => {
-        const angle = (i / Math.max(interleaved.length, 1)) * 2 * Math.PI - Math.PI / 2;
-        const isMulti = multiFieldTins.has(device.tin);
-        // Push multi-field sensors to a wider orbit for label clearance
-        const radius = isMulti ? 42 : 35;
+      return tins.map((tin, i) => {
+        const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
         return {
-          tin: device.tin,
-          x: 50 + radius * Math.cos(angle),
-          y: 50 + radius * Math.sin(angle),
+          tin,
+          x: TOPOLOGY_CX + SENSOR_ORBIT_R * Math.cos(angle),
+          y: TOPOLOGY_CY + SENSOR_ORBIT_R * Math.sin(angle),
         };
       });
     },
-    [devices]
+    [activeTinKey]
   );
 
   // Pre-compute displayOpts per TIN — avoids creating new object literals in the render loop
@@ -340,7 +368,7 @@ function SensorsTopologyInner({
     <div className="flex flex-col gap-2 h-full overflow-hidden">
       {/* Topology SVG — purely data-driven, NO timers */}
       <div className="relative w-full flex-[3] min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: colors.backgroundCard, border: `1px solid ${colors.border}` }}>
-        <svg viewBox="0 0 100 100" className="w-full h-full">
+        <svg viewBox={TOPOLOGY_VIEWBOX} className="w-full h-full" overflow="visible">
           <defs>
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="0.8" result="coloredBlur" />
@@ -358,7 +386,7 @@ function SensorsTopologyInner({
             return (
               <line
                 key={`line-${sensorPos.tin}`}
-                x1={50} y1={50}
+                x1={TOPOLOGY_CX} y1={TOPOLOGY_CY}
                 x2={sensorPos.x} y2={sensorPos.y}
                 stroke={colors.yellow}
                 strokeWidth="0.4"
@@ -369,11 +397,11 @@ function SensorsTopologyInner({
 
           {/* Central Endnode */}
           <g>
-            <circle cx={50} cy={50} r="10" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
-            <image href="/assets/Logos/End Node.png" x={43} y={43} width={14} height={14} preserveAspectRatio="xMidYMid meet" filter="url(#greenTint)" />
+            <circle cx={TOPOLOGY_CX} cy={TOPOLOGY_CY} r="10" fill={colors.backgroundCard} stroke={colors.yellow} strokeWidth="1" filter="url(#glow)" />
+            <image href="/assets/Logos/End Node.png" x={TOPOLOGY_CX - 7} y={TOPOLOGY_CY - 7} width={14} height={14} preserveAspectRatio="xMidYMid meet" filter="url(#greenTint)" />
           </g>
-          <text x={50} y={63} textAnchor="middle" fill={colors.text} fontSize="3.5" fontWeight="bold">{centralEndnode.displayName}</text>
-          <text x={50} y={67} textAnchor="middle" fill={colors.yellow} fontSize="2.8">{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} active</text>
+          <text x={TOPOLOGY_CX} y={TOPOLOGY_CY + 16} textAnchor="middle" fill={colors.text} fontSize="3.5" fontWeight="bold">{centralEndnode.displayName}</text>
+          <text x={TOPOLOGY_CX} y={TOPOLOGY_CY + 20.5} textAnchor="middle" fill={colors.yellow} fontSize="2.8">{activeSensorCount} sensor{activeSensorCount !== 1 ? "s" : ""} active</text>
 
           {/* Sensor Nodes — only active sensors are visible, with logos */}
           {sensorPositions.map((sensorPos) => {
